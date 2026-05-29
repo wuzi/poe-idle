@@ -4,7 +4,7 @@ use crate::components::{
     AttackClock, CharacterVisual, Health, HealthBar, MainCamera, MapEntity, Player,
     ProgressBarFill, ScreenFixed, TimedDespawn,
 };
-use crate::constants::{PLAYER_START_X, PLAYER_Y};
+use crate::constants::{MAP_PROGRESS_LEFT, MAP_PROGRESS_WIDTH, PLAYER_START_X, PLAYER_Y};
 use crate::data::{
     GameDatabase, MapDefinition, PlayerProfile, RunState, VisualProfile, seed_starting_equipment,
 };
@@ -279,12 +279,15 @@ pub(crate) fn sync_progress_bar(
     database: Res<GameDatabase>,
     run: Res<RunState>,
     player_query: Query<&Transform, (With<Player>, Without<ProgressBarFill>)>,
-    mut query: Query<(&mut Sprite, &mut Transform), (With<ProgressBarFill>, Without<Player>)>,
+    mut query: Query<
+        (&mut Sprite, &mut Transform, &mut ScreenFixed),
+        (With<ProgressBarFill>, Without<Player>),
+    >,
 ) {
     let Ok(player_transform) = player_query.single() else {
         return;
     };
-    let Ok((mut sprite, mut transform)) = query.single_mut() else {
+    let Ok((mut sprite, mut transform, mut fixed)) = query.single_mut() else {
         return;
     };
 
@@ -298,7 +301,9 @@ pub(crate) fn sync_progress_bar(
         run.enemies_defeated as f32 / run.enemies_total as f32
     };
     let progress = travel_progress.max(kill_progress).clamp(0.0, 1.0);
-    let width = 320.0 * progress;
+    let width = MAP_PROGRESS_WIDTH * progress;
     sprite.custom_size = Some(Vec2::new(width.max(1.0), 12.0));
-    transform.translation.x = transform.translation.x - transform.translation.x.fract();
+    let camera_x = transform.translation.x - fixed.offset.x;
+    fixed.offset.x = MAP_PROGRESS_LEFT + width * 0.5;
+    transform.translation.x = camera_x + fixed.offset.x;
 }

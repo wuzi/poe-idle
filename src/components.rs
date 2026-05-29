@@ -6,13 +6,15 @@ use crate::data::ItemInstance;
 pub(crate) struct UiState {
     pub(crate) active_panel: ActivePanel,
     pub(crate) dragged_item: Option<DraggedItem>,
+    pub(crate) portal_visible: bool,
 }
 
 impl Default for UiState {
     fn default() -> Self {
         Self {
-            active_panel: ActivePanel::None,
+            active_panel: ActivePanel::Character,
             dragged_item: None,
+            portal_visible: true,
         }
     }
 }
@@ -76,7 +78,6 @@ pub(crate) struct ScreenFixed {
 #[derive(Component)]
 pub(crate) enum HudText {
     Header,
-    Stats,
     Message,
 }
 
@@ -92,10 +93,21 @@ pub(crate) struct BottomButtonLabel {
 }
 
 #[derive(Component)]
+pub(crate) struct PortalToggleButton {
+    pub(crate) size: Vec2,
+}
+
+#[derive(Component)]
+pub(crate) struct PortalToggleButtonLabel;
+
+#[derive(Component)]
 pub(crate) struct CharacterPanelPiece;
 
 #[derive(Component)]
 pub(crate) struct InventoryPanelPiece;
+
+#[derive(Component)]
+pub(crate) struct PortalPanelPiece;
 
 #[derive(Component)]
 pub(crate) enum CharacterPanelText {

@@ -5,14 +5,15 @@ use crate::components::{
     ActivePanel, BottomButton, BottomButtonLabel, CharacterPanelPiece, CharacterPanelText,
     DraggedItem, DraggedItemVisual, Health, HudText, InventoryCell, InventoryCellLabel,
     InventoryPanelPiece, InventorySource, ItemTooltipBackground, ItemTooltipText, Player,
-    ProgressBarFill, ScreenFixed, UiState,
+    PortalPanelPiece, PortalToggleButton, PortalToggleButtonLabel, ProgressBarFill, ScreenFixed,
+    UiState,
 };
 use crate::constants::{
-    BOTTOM_BUTTON_SIZE, INVENTORY_CELL_SIZE, TOOLTIP_PADDING, TOOLTIP_WIDTH, WINDOW_HEIGHT,
-    WINDOW_WIDTH,
+    BOTTOM_BUTTON_SIZE, INVENTORY_CELL_SIZE, MAP_PROGRESS_LEFT, MAP_PROGRESS_WIDTH, MAP_PROGRESS_Y,
+    TOOLTIP_PADDING, TOOLTIP_WIDTH, WINDOW_HEIGHT, WINDOW_WIDTH,
 };
 use crate::data::{
-    GameDatabase, ItemInstance, ItemLocation, ItemSlot, PlayerProfile, Rarity, RunState,
+    GameDatabase, ItemInstance, ItemLocation, ItemSlot, PlayerProfile, Rarity, RunState, RunStatus,
     TalentGrant, item_armor_bonus, item_attack_speed_bonus, item_crit_chance_bonus,
     item_crit_damage_bonus, item_damage_bonus, item_health_regen_bonus, item_life_bonus,
     item_move_speed_bonus, item_slot_effect, rarity_color, rarity_effect,
@@ -21,95 +22,197 @@ use crate::data::{
 pub(crate) fn spawn_screen_layout(commands: &mut Commands) {
     spawn_fixed_rect(
         commands,
-        Vec3::new(0.0, 420.0, 30.0),
-        Vec2::new(668.0, 92.0),
-        Color::srgba(0.08, 0.08, 0.09, 0.93),
+        Vec3::new(0.0, 368.0, 31.0),
+        Vec2::new(152.0, 24.0),
+        Color::srgba(0.13, 0.11, 0.08, 0.96),
     );
     spawn_fixed_rect(
         commands,
-        Vec3::new(0.0, 350.0, 30.0),
-        Vec2::new(668.0, 34.0),
-        Color::srgba(0.25, 0.13, 0.08, 0.92),
+        Vec3::new(0.0, 352.0, 30.0),
+        Vec2::new(WINDOW_WIDTH as f32, 10.0),
+        Color::srgba(0.03, 0.025, 0.025, 0.98),
     );
-    spawn_inventory_panel_rect(
+
+    spawn_portal_panel_frame(commands, Vec3::new(394.0, 112.0, 30.0), "PORTAL");
+    spawn_portal_panel_rect(
         commands,
-        Vec3::new(0.0, -342.0, 30.0),
-        Vec2::new(668.0, 242.0),
-        Color::srgba(0.07, 0.07, 0.08, 0.94),
+        Vec3::new(394.0, 100.0, 31.0),
+        Vec2::new(312.0, 312.0),
+        Color::srgba(0.58, 0.50, 0.34, 0.94),
     );
-    spawn_fixed_rect(
+    spawn_portal_panel_rect(
         commands,
-        Vec3::new(-168.0, 322.0, 31.0),
-        Vec2::new(320.0, 12.0),
-        Color::srgba(0.02, 0.02, 0.02, 0.90),
+        Vec3::new(394.0, 244.0, 32.0),
+        Vec2::new(244.0, 28.0),
+        Color::srgba(0.74, 0.64, 0.42, 0.94),
+    );
+    spawn_portal_panel_rect(
+        commands,
+        Vec3::new(394.0, 126.0, 32.0),
+        Vec2::new(276.0, 250.0),
+        Color::srgba(0.78, 0.68, 0.46, 0.94),
+    );
+    spawn_portal_panel_rect(
+        commands,
+        Vec3::new(394.0, 232.0, 33.0),
+        Vec2::new(244.0, 28.0),
+        Color::srgba(0.62, 0.46, 0.24, 0.92),
+    );
+    spawn_portal_panel_label(
+        commands,
+        "MAP DETAILS",
+        Vec3::new(330.0, 242.0, 35.0),
+        15.0,
+        Color::srgb(0.14, 0.08, 0.035),
+    );
+    spawn_portal_panel_rect(
+        commands,
+        Vec3::new(
+            MAP_PROGRESS_LEFT + MAP_PROGRESS_WIDTH * 0.5,
+            MAP_PROGRESS_Y,
+            32.0,
+        ),
+        Vec2::new(MAP_PROGRESS_WIDTH, 12.0),
+        Color::srgba(0.05, 0.04, 0.035, 0.95),
     );
 
     commands.spawn((
         Sprite::from_color(Color::srgb(0.94, 0.66, 0.22), Vec2::new(1.0, 12.0)),
-        Transform::from_xyz(-328.0, 322.0, 32.0),
+        Transform::from_xyz(MAP_PROGRESS_LEFT, MAP_PROGRESS_Y, 33.0),
         ScreenFixed {
-            offset: Vec3::new(-328.0, 322.0, 32.0),
+            offset: Vec3::new(MAP_PROGRESS_LEFT, MAP_PROGRESS_Y, 33.0),
         },
+        PortalPanelPiece,
         ProgressBarFill,
     ));
 
     spawn_fixed_text(
         commands,
         HudText::Header,
-        Vec3::new(-315.0, 448.0, 35.0),
-        18.0,
+        Vec3::new(-62.0, 378.0, 35.0),
+        14.0,
     );
-    spawn_fixed_text(
-        commands,
-        HudText::Stats,
-        Vec3::new(-315.0, 405.0, 35.0),
-        15.0,
-    );
-    spawn_fixed_text(
+    spawn_portal_text(
         commands,
         HudText::Message,
-        Vec3::new(-315.0, 360.0, 35.0),
-        16.0,
+        Vec3::new(270.0, 212.0, 35.0),
+        13.0,
     );
 
-    spawn_inventory_panel_label(commands, "Inventory", Vec3::new(-290.0, -236.0, 35.0), 17.0);
-    spawn_inventory_panel_label(commands, "Stash", Vec3::new(60.0, -236.0, 35.0), 17.0);
-    spawn_inventory_panel_label(commands, "Equipped", Vec3::new(60.0, -384.0, 35.0), 15.0);
+    spawn_inventory_panel_frame(commands, Vec3::new(-394.0, 112.0, 30.0), "STASH");
+    spawn_inventory_panel_frame(commands, Vec3::new(0.0, 112.0, 30.0), "HERO");
+    spawn_inventory_panel_label(commands, "Inventory", Vec3::new(-134.0, 54.0, 35.0), 15.0);
+    spawn_inventory_panel_label(commands, "Equipped", Vec3::new(-134.0, 286.0, 35.0), 15.0);
 
-    spawn_inventory_cells(
-        commands,
-        InventorySource::Inventory,
-        -292.0,
-        -282.0,
-        6,
-        4,
-        42.0,
-    );
-    spawn_inventory_cells(commands, InventorySource::Stash, 60.0, -282.0, 5, 3, 42.0);
+    spawn_inventory_cells(commands, InventorySource::Stash, -532.0, 270.0, 6, 5, 46.0);
     spawn_inventory_cells(
         commands,
         InventorySource::Equipment,
-        60.0,
-        -414.0,
+        -134.0,
+        250.0,
         4,
         2,
-        38.0,
+        46.0,
+    );
+    spawn_inventory_cells(
+        commands,
+        InventorySource::Inventory,
+        -134.0,
+        18.0,
+        6,
+        4,
+        46.0,
     );
     spawn_bottom_button(
         commands,
         ActivePanel::Inventory,
-        "Inventory",
-        Vec3::new(-292.0, -447.0, 35.0),
+        "STASH",
+        Vec3::new(-50.0, -338.0, 35.0),
     );
     spawn_bottom_button(
         commands,
         ActivePanel::Character,
-        "Character",
-        Vec3::new(-164.0, -447.0, 35.0),
+        "HERO",
+        Vec3::new(50.0, -338.0, 35.0),
     );
+    spawn_portal_toggle_button(commands, "PORTAL", Vec3::new(150.0, -338.0, 35.0));
     spawn_character_panel(commands);
     spawn_item_tooltip(commands);
     spawn_dragged_item_visual(commands);
+}
+
+fn spawn_portal_panel_frame(commands: &mut Commands, center: Vec3, title: &'static str) {
+    spawn_portal_panel_rect(
+        commands,
+        center,
+        Vec2::new(368.0, 502.0),
+        Color::srgba(0.025, 0.025, 0.025, 0.98),
+    );
+    spawn_portal_panel_rect(
+        commands,
+        center + Vec3::new(0.0, 0.0, 1.0),
+        Vec2::new(356.0, 490.0),
+        Color::srgba(0.19, 0.18, 0.17, 0.96),
+    );
+    spawn_portal_panel_rect(
+        commands,
+        center + Vec3::new(0.0, -18.0, 2.0),
+        Vec2::new(340.0, 434.0),
+        Color::srgba(0.10, 0.095, 0.085, 0.96),
+    );
+    spawn_portal_panel_rect(
+        commands,
+        center + Vec3::new(0.0, 218.0, 3.0),
+        Vec2::new(338.0, 40.0),
+        Color::srgba(0.56, 0.10, 0.07, 0.98),
+    );
+    spawn_portal_panel_rect(
+        commands,
+        center + Vec3::new(0.0, 195.0, 4.0),
+        Vec2::new(338.0, 4.0),
+        Color::srgba(0.98, 0.56, 0.12, 0.92),
+    );
+    spawn_portal_panel_label(
+        commands,
+        title,
+        center + Vec3::new(-54.0, 232.0, 5.0),
+        22.0,
+        Color::srgb(1.0, 0.72, 0.20),
+    );
+}
+
+fn spawn_inventory_panel_frame(commands: &mut Commands, center: Vec3, title: &'static str) {
+    spawn_inventory_panel_rect(
+        commands,
+        center,
+        Vec2::new(368.0, 502.0),
+        Color::srgba(0.025, 0.025, 0.025, 0.98),
+    );
+    spawn_inventory_panel_rect(
+        commands,
+        center + Vec3::new(0.0, 0.0, 1.0),
+        Vec2::new(356.0, 490.0),
+        Color::srgba(0.19, 0.18, 0.17, 0.96),
+    );
+    spawn_inventory_panel_rect(
+        commands,
+        center + Vec3::new(0.0, -18.0, 2.0),
+        Vec2::new(340.0, 434.0),
+        Color::srgba(0.09, 0.085, 0.08, 0.97),
+    );
+    spawn_inventory_panel_rect(
+        commands,
+        center + Vec3::new(0.0, 218.0, 3.0),
+        Vec2::new(338.0, 40.0),
+        Color::srgba(0.56, 0.10, 0.07, 0.98),
+    );
+    spawn_inventory_panel_rect(
+        commands,
+        center + Vec3::new(0.0, 195.0, 4.0),
+        Vec2::new(338.0, 4.0),
+        Color::srgba(0.98, 0.56, 0.12, 0.92),
+    );
+    spawn_inventory_panel_label(commands, title, center + Vec3::new(-54.0, 232.0, 5.0), 22.0);
 }
 
 fn spawn_inventory_cells(
@@ -135,7 +238,7 @@ fn spawn_inventory_cells(
                     Vec2::splat(INVENTORY_CELL_SIZE),
                 ),
                 Transform::from_translation(offset),
-                Visibility::Visible,
+                Visibility::Hidden,
                 ScreenFixed { offset },
                 InventoryCell { source, index },
                 InventoryPanelPiece,
@@ -151,7 +254,7 @@ fn spawn_inventory_cells(
                 TextLayout::new_with_justify(Justify::Center),
                 Anchor::CENTER,
                 Transform::from_translation(offset + Vec3::new(0.0, 0.0, 1.0)),
-                Visibility::Visible,
+                Visibility::Hidden,
                 ScreenFixed {
                     offset: offset + Vec3::new(0.0, 0.0, 1.0),
                 },
@@ -170,11 +273,21 @@ fn spawn_fixed_rect(commands: &mut Commands, offset: Vec3, size: Vec2, color: Co
     ));
 }
 
-fn spawn_inventory_panel_rect(commands: &mut Commands, offset: Vec3, size: Vec2, color: Color) {
+fn spawn_portal_panel_rect(commands: &mut Commands, offset: Vec3, size: Vec2, color: Color) {
     commands.spawn((
         Sprite::from_color(color, size),
         Transform::from_translation(offset),
         Visibility::Visible,
+        ScreenFixed { offset },
+        PortalPanelPiece,
+    ));
+}
+
+fn spawn_inventory_panel_rect(commands: &mut Commands, offset: Vec3, size: Vec2, color: Color) {
+    commands.spawn((
+        Sprite::from_color(color, size),
+        Transform::from_translation(offset),
+        Visibility::Hidden,
         ScreenFixed { offset },
         InventoryPanelPiece,
     ));
@@ -196,6 +309,47 @@ fn spawn_fixed_text(commands: &mut Commands, kind: HudText, offset: Vec3, font_s
     ));
 }
 
+fn spawn_portal_text(commands: &mut Commands, kind: HudText, offset: Vec3, font_size: f32) {
+    commands.spawn((
+        Text2d::new(""),
+        TextFont {
+            font_size,
+            ..default()
+        },
+        TextColor(Color::srgb(0.10, 0.07, 0.04)),
+        TextLayout::new_with_justify(Justify::Left),
+        Anchor::TOP_LEFT,
+        Transform::from_translation(offset),
+        Visibility::Visible,
+        ScreenFixed { offset },
+        PortalPanelPiece,
+        kind,
+    ));
+}
+
+fn spawn_portal_panel_label(
+    commands: &mut Commands,
+    label: &'static str,
+    offset: Vec3,
+    font_size: f32,
+    color: Color,
+) {
+    commands.spawn((
+        Text2d::new(label),
+        TextFont {
+            font_size,
+            ..default()
+        },
+        TextColor(color),
+        TextLayout::new_with_justify(Justify::Left),
+        Anchor::TOP_LEFT,
+        Transform::from_translation(offset),
+        Visibility::Visible,
+        ScreenFixed { offset },
+        PortalPanelPiece,
+    ));
+}
+
 fn spawn_inventory_panel_label(
     commands: &mut Commands,
     label: &'static str,
@@ -212,7 +366,7 @@ fn spawn_inventory_panel_label(
         TextLayout::new_with_justify(Justify::Left),
         Anchor::TOP_LEFT,
         Transform::from_translation(offset),
-        Visibility::Visible,
+        Visibility::Hidden,
         ScreenFixed { offset },
         InventoryPanelPiece,
     ));
@@ -225,7 +379,7 @@ fn spawn_bottom_button(
     offset: Vec3,
 ) {
     commands.spawn((
-        Sprite::from_color(Color::srgba(0.19, 0.11, 0.07, 0.98), BOTTOM_BUTTON_SIZE),
+        Sprite::from_color(Color::srgba(0.30, 0.11, 0.04, 0.98), BOTTOM_BUTTON_SIZE),
         Transform::from_translation(offset),
         ScreenFixed { offset },
         BottomButton {
@@ -234,16 +388,16 @@ fn spawn_bottom_button(
         },
     ));
 
-    let text_offset = offset + Vec3::new(-48.0, 9.0, 1.0);
+    let text_offset = offset + Vec3::new(0.0, 7.0, 1.0);
     commands.spawn((
         Text2d::new(label),
         TextFont {
-            font_size: 14.0,
+            font_size: 13.0,
             ..default()
         },
         TextColor(Color::srgb(0.96, 0.70, 0.32)),
-        TextLayout::new_with_justify(Justify::Left),
-        Anchor::TOP_LEFT,
+        TextLayout::new_with_justify(Justify::Center),
+        Anchor::CENTER,
         Transform::from_translation(text_offset),
         ScreenFixed {
             offset: text_offset,
@@ -252,86 +406,153 @@ fn spawn_bottom_button(
     ));
 }
 
+fn spawn_portal_toggle_button(commands: &mut Commands, label: &'static str, offset: Vec3) {
+    commands.spawn((
+        Sprite::from_color(Color::srgba(0.30, 0.11, 0.04, 0.98), BOTTOM_BUTTON_SIZE),
+        Transform::from_translation(offset),
+        ScreenFixed { offset },
+        PortalToggleButton {
+            size: BOTTOM_BUTTON_SIZE,
+        },
+    ));
+
+    let text_offset = offset + Vec3::new(0.0, 7.0, 1.0);
+    commands.spawn((
+        Text2d::new(label),
+        TextFont {
+            font_size: 13.0,
+            ..default()
+        },
+        TextColor(Color::srgb(0.18, 0.07, 0.02)),
+        TextLayout::new_with_justify(Justify::Center),
+        Anchor::CENTER,
+        Transform::from_translation(text_offset),
+        ScreenFixed {
+            offset: text_offset,
+        },
+        PortalToggleButtonLabel,
+    ));
+}
+
 fn spawn_character_panel(commands: &mut Commands) {
-    spawn_character_panel_rect(
-        commands,
-        Vec3::new(0.0, 96.0, 42.0),
-        Vec2::new(650.0, 420.0),
-        Color::srgba(0.06, 0.06, 0.065, 0.97),
-    );
-    spawn_character_panel_rect(
-        commands,
-        Vec3::new(0.0, 279.0, 43.0),
-        Vec2::new(620.0, 42.0),
-        Color::srgba(0.25, 0.13, 0.08, 0.95),
-    );
-    spawn_character_panel_rect(
-        commands,
-        Vec3::new(-164.0, 101.0, 43.0),
-        Vec2::new(288.0, 306.0),
-        Color::srgba(0.10, 0.10, 0.11, 0.95),
-    );
-    spawn_character_panel_rect(
-        commands,
-        Vec3::new(164.0, 101.0, 43.0),
-        Vec2::new(288.0, 306.0),
-        Color::srgba(0.10, 0.10, 0.11, 0.95),
-    );
+    spawn_character_panel_frame(commands, Vec3::new(-394.0, 112.0, 42.0), "STATUS");
+    spawn_character_panel_frame(commands, Vec3::new(0.0, 112.0, 42.0), "HERO");
 
     spawn_character_panel_text(
         commands,
         CharacterPanelText::Header,
-        Vec3::new(-298.0, 295.0, 44.0),
-        18.0,
+        Vec3::new(-40.0, 310.0, 47.0),
+        15.0,
         Color::srgb(0.96, 0.70, 0.32),
     );
     spawn_character_panel_text(
         commands,
         CharacterPanelText::Status,
-        Vec3::new(-292.0, 244.0, 44.0),
+        Vec3::new(-548.0, 286.0, 47.0),
         13.0,
         Color::srgb(0.92, 0.89, 0.80),
     );
     spawn_character_panel_text(
         commands,
         CharacterPanelText::Combat,
-        Vec3::new(-292.0, 118.0, 44.0),
-        13.0,
+        Vec3::new(-548.0, 148.0, 47.0),
+        12.0,
         Color::srgb(0.92, 0.89, 0.80),
     );
     spawn_character_panel_text(
         commands,
         CharacterPanelText::Attributes,
-        Vec3::new(-292.0, 28.0, 44.0),
-        13.0,
+        Vec3::new(-548.0, 38.0, 47.0),
+        12.0,
         Color::srgb(0.92, 0.89, 0.80),
     );
     spawn_character_panel_text(
         commands,
         CharacterPanelText::Equipment,
-        Vec3::new(36.0, 24.0, 44.0),
-        13.0,
+        Vec3::new(-150.0, 272.0, 47.0),
+        12.0,
         Color::srgb(0.92, 0.89, 0.80),
     );
     spawn_character_panel_text(
         commands,
         CharacterPanelText::Talents,
-        Vec3::new(36.0, 244.0, 44.0),
-        14.0,
+        Vec3::new(-548.0, -58.0, 47.0),
+        12.0,
         Color::srgb(0.92, 0.89, 0.80),
     );
     spawn_character_panel_text(
         commands,
         CharacterPanelText::Upgrades,
-        Vec3::new(36.0, 166.0, 44.0),
-        13.0,
+        Vec3::new(-150.0, 82.0, 47.0),
+        12.0,
         Color::srgb(0.92, 0.89, 0.80),
+    );
+}
+
+fn spawn_character_panel_frame(commands: &mut Commands, center: Vec3, title: &'static str) {
+    spawn_character_panel_rect(
+        commands,
+        center,
+        Vec2::new(368.0, 502.0),
+        Color::srgba(0.025, 0.025, 0.025, 0.98),
+    );
+    spawn_character_panel_rect(
+        commands,
+        center + Vec3::new(0.0, 0.0, 1.0),
+        Vec2::new(356.0, 490.0),
+        Color::srgba(0.19, 0.18, 0.17, 0.96),
+    );
+    spawn_character_panel_rect(
+        commands,
+        center + Vec3::new(0.0, -18.0, 2.0),
+        Vec2::new(340.0, 434.0),
+        Color::srgba(0.10, 0.095, 0.085, 0.97),
+    );
+    spawn_character_panel_rect(
+        commands,
+        center + Vec3::new(0.0, 218.0, 3.0),
+        Vec2::new(338.0, 40.0),
+        Color::srgba(0.56, 0.10, 0.07, 0.98),
+    );
+    spawn_character_panel_rect(
+        commands,
+        center + Vec3::new(0.0, 195.0, 4.0),
+        Vec2::new(338.0, 4.0),
+        Color::srgba(0.98, 0.56, 0.12, 0.92),
+    );
+    spawn_character_panel_static_label(
+        commands,
+        title,
+        center + Vec3::new(-54.0, 232.0, 5.0),
+        22.0,
     );
 }
 
 fn spawn_character_panel_rect(commands: &mut Commands, offset: Vec3, size: Vec2, color: Color) {
     commands.spawn((
         Sprite::from_color(color, size),
+        Transform::from_translation(offset),
+        Visibility::Hidden,
+        ScreenFixed { offset },
+        CharacterPanelPiece,
+    ));
+}
+
+fn spawn_character_panel_static_label(
+    commands: &mut Commands,
+    label: &'static str,
+    offset: Vec3,
+    font_size: f32,
+) {
+    commands.spawn((
+        Text2d::new(label),
+        TextFont {
+            font_size,
+            ..default()
+        },
+        TextColor(Color::srgb(1.0, 0.72, 0.20)),
+        TextLayout::new_with_justify(Justify::Left),
+        Anchor::TOP_LEFT,
         Transform::from_translation(offset),
         Visibility::Hidden,
         ScreenFixed { offset },
@@ -446,11 +667,11 @@ pub(crate) fn handle_bottom_buttons(
 
         let active = next_panel == button.panel;
         sprite.color = if active {
-            Color::srgba(0.55, 0.28, 0.10, 0.98)
+            Color::srgba(0.92, 0.50, 0.08, 0.98)
         } else if hovered {
-            Color::srgba(0.34, 0.18, 0.09, 0.98)
+            Color::srgba(0.58, 0.20, 0.06, 0.98)
         } else {
-            Color::srgba(0.19, 0.11, 0.07, 0.98)
+            Color::srgba(0.30, 0.11, 0.04, 0.98)
         };
     }
 
@@ -458,9 +679,60 @@ pub(crate) fn handle_bottom_buttons(
 
     for (label, mut text_color) in &mut label_query {
         text_color.0 = if ui_state.active_panel == label.panel {
-            Color::srgb(1.0, 0.82, 0.42)
+            Color::srgb(0.18, 0.07, 0.02)
         } else {
             Color::srgb(0.96, 0.70, 0.32)
+        };
+    }
+}
+
+pub(crate) fn handle_portal_button(
+    mut ui_state: ResMut<UiState>,
+    mouse: Res<ButtonInput<MouseButton>>,
+    window_query: Query<&Window>,
+    mut button_query: Query<(&PortalToggleButton, &ScreenFixed, &mut Sprite)>,
+    mut label_query: Query<&mut TextColor, With<PortalToggleButtonLabel>>,
+) {
+    let cursor_offset = cursor_offset(&window_query);
+
+    for (button, fixed, mut sprite) in &mut button_query {
+        let hovered = cursor_offset.is_some_and(|cursor| {
+            let half_size = button.size * 0.5;
+            (cursor.x - fixed.offset.x).abs() <= half_size.x
+                && (cursor.y - fixed.offset.y).abs() <= half_size.y
+        });
+
+        if hovered && mouse.just_pressed(MouseButton::Left) {
+            ui_state.portal_visible = !ui_state.portal_visible;
+        }
+
+        sprite.color = if ui_state.portal_visible {
+            Color::srgba(0.92, 0.50, 0.08, 0.98)
+        } else if hovered {
+            Color::srgba(0.58, 0.20, 0.06, 0.98)
+        } else {
+            Color::srgba(0.30, 0.11, 0.04, 0.98)
+        };
+    }
+
+    for mut text_color in &mut label_query {
+        text_color.0 = if ui_state.portal_visible {
+            Color::srgb(0.18, 0.07, 0.02)
+        } else {
+            Color::srgb(0.96, 0.70, 0.32)
+        };
+    }
+}
+
+pub(crate) fn sync_portal_panel(
+    ui_state: Res<UiState>,
+    mut visibility_query: Query<&mut Visibility, With<PortalPanelPiece>>,
+) {
+    for mut visibility in &mut visibility_query {
+        *visibility = if ui_state.portal_visible {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
         };
     }
 }
@@ -594,9 +866,9 @@ pub(crate) fn sync_character_panel(
 
     for (kind, mut text) in &mut text_query {
         text.0 = match kind {
-            CharacterPanelText::Header => format!("Character Profile  |  {}", class.name),
+            CharacterPanelText::Header => format!("{}  Lv.{}", class.name, profile.level),
             CharacterPanelText::Status => format!(
-                "Status\nLevel {}\nEXP {}/{}\nHP {}\nGold {}\nMap {} {}/{}\nRespawns {}",
+                "Level        {}\nEXP          {}/{}\nHP           {}\nGold         {}\nMap          {}\nEnemies      {}/{}\nRespawns     {}",
                 profile.level,
                 profile.xp,
                 profile.xp_to_next_level(),
@@ -608,7 +880,7 @@ pub(crate) fn sync_character_panel(
                 profile.respawns,
             ),
             CharacterPanelText::Combat => format!(
-                "Combat\nDamage {:.0}\nArmor {:.0}\nAttacks/sec {:.2}\nCrit {:.1}% / +{:.0}%\nMove speed {:.0}\nRegen {:.1}/s\nLoot bonus +{:.0}%",
+                "Combat\nDamage       {:.0}\nArmor        {:.0}\nAttack speed {:.2}/s\nCrit         {:.1}% / +{:.0}%\nMove speed   {:.0}\nRegen        {:.1}/s\nLoot bonus   +{:.0}%",
                 stats.damage,
                 stats.armor,
                 stats.attacks_per_second,
@@ -619,7 +891,7 @@ pub(crate) fn sync_character_panel(
                 stats.loot_bonus,
             ),
             CharacterPanelText::Attributes => format!(
-                "Attributes\nStrength {}\nDexterity {}\nIntelligence {}\nVitality {}",
+                "Attributes\nSTR {}   DEX {}\nINT {}   VIT {}",
                 attributes.strength,
                 attributes.dexterity,
                 attributes.intelligence,
@@ -876,45 +1148,86 @@ pub(crate) fn sync_hud_text(
     database: Res<GameDatabase>,
     profile: Res<PlayerProfile>,
     run: Res<RunState>,
-    player_query: Query<&Health, With<Player>>,
     mut query: Query<(&HudText, &mut Text2d)>,
 ) {
     let map = &database.maps[run.map_index];
-    let class = profile.class(&database);
-    let stats = profile.derived_stats(&database);
-    let attributes = profile.attributes(&database);
-    let health_text = player_query
-        .single()
-        .map(|health| format!("HP {:.0}/{:.0}", health.current.max(0.0), health.max))
-        .unwrap_or_else(|_| "HP --".into());
+    let run_status = match run.status {
+        RunStatus::Running => "Running",
+        RunStatus::Dead => "Rebuilding",
+        RunStatus::Cleared => "Cleared",
+    };
 
     for (kind, mut text) in &mut query {
         text.0 = match kind {
-            HudText::Header => format!(
-                "{} Lv.{}  |  Gold {}  |  Atlas Tier {}",
-                class.name, profile.level, profile.gold, run.atlas_tier
-            ),
-            HudText::Stats => format!(
-                "{}  |  DMG {:.0}  ARM {:.0}  APS {:.2}  Crit {:.1}%/+{:.0}%\nMS {:.0}  Regen {:.1}/s  |  STR {}  DEX {}  INT {}  VIT {}",
-                health_text,
-                stats.damage,
-                stats.armor,
-                stats.attacks_per_second,
-                stats.crit_chance,
-                stats.crit_damage,
-                stats.move_speed,
-                stats.health_regeneration,
-                attributes.strength,
-                attributes.dexterity,
-                attributes.intelligence,
-                attributes.vitality
-            ),
+            HudText::Header => format!("Gold {:>6}", profile.gold),
             HudText::Message => format!(
-                "{}  |  {} {}/{}",
-                run.message, map.name, run.enemies_defeated, run.enemies_total
+                "{}\nDifficulty   Normal\nArea Level   {}\nAtlas Tier   {}\nRoute Length {:.0}m\nPacks        {}/{}\nEnemies      {}/{}\nSpawned      {}\nStatus       {}\nLog\n{}",
+                map.name,
+                map.area_level,
+                run.atlas_tier,
+                map.finish_x,
+                run.next_pack_index,
+                map.packs.len(),
+                run.enemies_defeated,
+                run.enemies_total,
+                run.enemies_spawned,
+                run_status,
+                portal_log_lines(&run.message),
             ),
         };
     }
+}
+
+fn portal_log_lines(message: &str) -> String {
+    const MAX_LINE_CHARS: usize = 26;
+    const MAX_LINES: usize = 2;
+
+    let mut lines = Vec::new();
+    let mut current_line = String::new();
+    let mut truncated = false;
+
+    for word in message.split_whitespace() {
+        let word_length = word.chars().count();
+        if current_line.is_empty() {
+            current_line = word.chars().take(MAX_LINE_CHARS).collect();
+            truncated |= word_length > MAX_LINE_CHARS;
+        } else if current_line.chars().count() + 1 + word_length <= MAX_LINE_CHARS {
+            current_line.push(' ');
+            current_line.push_str(word);
+        } else {
+            lines.push(std::mem::take(&mut current_line));
+            if lines.len() == MAX_LINES {
+                truncated = true;
+                break;
+            }
+            current_line = word.chars().take(MAX_LINE_CHARS).collect();
+            truncated |= word_length > MAX_LINE_CHARS;
+        }
+    }
+
+    if lines.len() < MAX_LINES && !current_line.is_empty() {
+        lines.push(current_line);
+    }
+
+    if lines.is_empty() {
+        lines.push("-".to_string());
+    }
+
+    if truncated {
+        if let Some(last_line) = lines.last_mut() {
+            while last_line.chars().count() > MAX_LINE_CHARS - 3 {
+                last_line.pop();
+            }
+            last_line.push_str("...");
+        }
+    }
+
+    lines
+        .into_iter()
+        .take(MAX_LINES)
+        .map(|line| format!("  {line}"))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn item_tooltip_text(item: &ItemInstance, database: &GameDatabase) -> String {
@@ -975,22 +1288,19 @@ fn equipment_summary(profile: &PlayerProfile, database: &GameDatabase) -> String
             .as_ref()
             .map(|item| {
                 let definition = &database.items[item.def_id];
-                format!(
-                    "{} +{} ilvl {}",
-                    definition.name, item.power, item.item_level
-                )
+                format!("{} +{}", definition.name, item.power)
             })
-            .unwrap_or_else(|| "Empty".into());
-        lines.push(format!("{}: {}", slot.name(), text));
+            .unwrap_or_else(|| "Empty".to_string());
+        lines.push(format!("{:>4}  {}", slot_abbreviation(slot), text));
     }
     lines.join("\n")
 }
 
 fn talent_summary(profile: &PlayerProfile, database: &GameDatabase) -> String {
-    let mut lines = vec![format!("Talents  Points {}", profile.talent_points)];
+    let mut lines = vec![format!("Talents   Points {}", profile.talent_points)];
     for (index, talent) in database.talents.iter().enumerate() {
         lines.push(format!(
-            "{} {}/{}",
+            "{}  {}/{}",
             talent.name, profile.allocated_talents[index], talent.max_points
         ));
     }
@@ -1013,7 +1323,7 @@ fn upgrade_summary(profile: &PlayerProfile, database: &GameDatabase) -> String {
     }
 
     format!(
-        "Upgrades\nDamage talents +{damage_bonus:.0}%\nHealth talents +{health_bonus:.0}%\nLoot chance +{loot_bonus:.0}%\n\nNext level gains\n+{} STR  +{} DEX\n+{} INT  +{} VIT",
+        "Upgrades\nDamage talents +{damage_bonus:.0}%\nHealth talents +{health_bonus:.0}%\nLoot chance     +{loot_bonus:.0}%\n\nNext level\n+{} STR  +{} DEX\n+{} INT  +{} VIT",
         class.growth.strength,
         class.growth.dexterity,
         class.growth.intelligence,

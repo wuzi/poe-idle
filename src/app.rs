@@ -8,8 +8,9 @@ use crate::gameplay::{
     regenerate_player_health, resolve_combat_outcomes, spawn_enemy_packs,
 };
 use crate::ui::{
-    handle_bottom_buttons, handle_inventory_input, sync_character_panel, sync_dragged_item_visual,
-    sync_hud_text, sync_inventory_grid, sync_inventory_panel, update_item_tooltip,
+    handle_bottom_buttons, handle_inventory_input, handle_portal_button, sync_character_panel,
+    sync_dragged_item_visual, sync_hud_text, sync_inventory_grid, sync_inventory_panel,
+    sync_portal_panel, update_item_tooltip,
 };
 use crate::visual::{
     camera_follow, setup, sync_character_visuals, sync_health_bars, sync_progress_bar,
@@ -54,6 +55,8 @@ pub(crate) fn run() {
                     .chain(),
                 (
                     handle_bottom_buttons,
+                    handle_portal_button,
+                    sync_portal_panel,
                     sync_inventory_panel,
                     handle_inventory_input,
                     update_item_tooltip,
