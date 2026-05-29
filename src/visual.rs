@@ -39,7 +39,9 @@ pub(crate) fn setup(
         ),
     );
     spawn_health_bar(&mut commands, player, 68.0, 50.0, false);
-    spawn_screen_layout(&mut commands);
+    profile.ensure_talent_slots(&database);
+    let talents = profile.class(&database).talents.clone();
+    spawn_screen_layout(&mut commands, &talents);
     seed_starting_equipment(&mut profile, &database);
     begin_current_map(&mut run, &database);
 }

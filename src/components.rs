@@ -7,6 +7,7 @@ pub(crate) struct UiState {
     pub(crate) active_panel: ActivePanel,
     pub(crate) dragged_item: Option<DraggedItem>,
     pub(crate) portal_visible: bool,
+    pub(crate) hovered_talent: Option<usize>,
 }
 
 impl Default for UiState {
@@ -15,6 +16,7 @@ impl Default for UiState {
             active_panel: ActivePanel::Character,
             dragged_item: None,
             portal_visible: true,
+            hovered_talent: None,
         }
     }
 }
@@ -30,6 +32,7 @@ pub(crate) enum ActivePanel {
     None,
     Inventory,
     Character,
+    Talents,
 }
 
 #[derive(Component)]
@@ -108,6 +111,39 @@ pub(crate) struct InventoryPanelPiece;
 
 #[derive(Component)]
 pub(crate) struct PortalPanelPiece;
+
+#[derive(Component)]
+pub(crate) struct TalentPanelPiece;
+
+#[derive(Component)]
+pub(crate) struct TalentNodeButton {
+    pub(crate) index: usize,
+    pub(crate) size: Vec2,
+}
+
+#[derive(Component)]
+pub(crate) struct TalentNodeLabel {
+    pub(crate) index: usize,
+}
+
+#[derive(Component)]
+pub(crate) struct TalentConnector {
+    pub(crate) node: usize,
+}
+
+#[derive(Component)]
+pub(crate) struct TalentHeaderText;
+
+#[derive(Component)]
+pub(crate) struct TalentInfoText;
+
+#[derive(Component)]
+pub(crate) struct TalentResetButton {
+    pub(crate) size: Vec2,
+}
+
+#[derive(Component)]
+pub(crate) struct TalentResetLabel;
 
 #[derive(Component)]
 pub(crate) enum CharacterPanelText {

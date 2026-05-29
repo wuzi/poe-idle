@@ -7,7 +7,6 @@ pub(crate) struct GameDatabase {
     pub(crate) classes: Vec<ClassDefinition>,
     pub(crate) maps: Vec<MapDefinition>,
     pub(crate) items: Vec<ItemDefinition>,
-    pub(crate) talents: Vec<TalentDefinition>,
 }
 
 impl Default for GameDatabase {
@@ -37,6 +36,7 @@ impl Default for GameDatabase {
                         color: Color::srgb(0.56, 0.63, 0.68),
                         size: Vec2::new(46.0, 64.0),
                     },
+                    talents: knight_talents(),
                 },
                 ClassDefinition {
                     id: ClassId::Ranger,
@@ -61,6 +61,7 @@ impl Default for GameDatabase {
                         color: Color::srgb(0.43, 0.72, 0.42),
                         size: Vec2::new(40.0, 60.0),
                     },
+                    talents: ranger_talents(),
                 },
                 ClassDefinition {
                     id: ClassId::Acolyte,
@@ -85,6 +86,7 @@ impl Default for GameDatabase {
                         color: Color::srgb(0.55, 0.50, 0.86),
                         size: Vec2::new(42.0, 60.0),
                     },
+                    talents: acolyte_talents(),
                 },
             ],
             maps: vec![
@@ -257,23 +259,6 @@ impl Default for GameDatabase {
                     },
                 },
             ],
-            talents: vec![
-                TalentDefinition {
-                    name: "Brutal Momentum",
-                    max_points: 5,
-                    grant: TalentGrant::DamagePercent(8.0),
-                },
-                TalentDefinition {
-                    name: "Enduring Guard",
-                    max_points: 5,
-                    grant: TalentGrant::HealthPercent(7.0),
-                },
-                TalentDefinition {
-                    name: "Cartographer's Luck",
-                    max_points: 5,
-                    grant: TalentGrant::LootChance(4.0),
-                },
-            ],
         }
     }
 }
@@ -295,6 +280,7 @@ pub(crate) struct ClassDefinition {
     pub(crate) base_armor: f32,
     pub(crate) attacks_per_second: f32,
     pub(crate) visual: VisualProfile,
+    pub(crate) talents: Vec<TalentNode>,
 }
 
 #[derive(Clone)]
@@ -598,18 +584,437 @@ impl Rarity {
     }
 }
 
-#[derive(Clone)]
-pub(crate) struct TalentDefinition {
+#[derive(Clone, Copy)]
+pub(crate) struct TalentNode {
     pub(crate) name: &'static str,
+    pub(crate) flavor: &'static str,
     pub(crate) max_points: u8,
     pub(crate) grant: TalentGrant,
+    pub(crate) requires: Option<usize>,
+    pub(crate) position: Vec2,
 }
 
 #[derive(Clone, Copy)]
 pub(crate) enum TalentGrant {
-    DamagePercent(f32),
-    HealthPercent(f32),
+    Damage(f32),
+    Life(f32),
+    Armor(f32),
+    AttackSpeed(f32),
+    CritChance(f32),
+    CritDamage(f32),
+    MoveSpeed(f32),
+    LifeRegen(f32),
     LootChance(f32),
+    Strength(f32),
+    Dexterity(f32),
+    Intelligence(f32),
+    Vitality(f32),
+}
+
+impl TalentGrant {
+    fn per_point(self) -> f32 {
+        match self {
+            TalentGrant::Damage(v)
+            | TalentGrant::Life(v)
+            | TalentGrant::Armor(v)
+            | TalentGrant::AttackSpeed(v)
+            | TalentGrant::CritChance(v)
+            | TalentGrant::CritDamage(v)
+            | TalentGrant::MoveSpeed(v)
+            | TalentGrant::LifeRegen(v)
+            | TalentGrant::LootChance(v)
+            | TalentGrant::Strength(v)
+            | TalentGrant::Dexterity(v)
+            | TalentGrant::Intelligence(v)
+            | TalentGrant::Vitality(v) => v,
+        }
+    }
+
+    fn apply(self, effects: &mut TalentEffects, points: f32) {
+        let total = self.per_point() * points;
+        match self {
+            TalentGrant::Damage(_) => effects.damage_percent += total,
+            TalentGrant::Life(_) => effects.life_percent += total,
+            TalentGrant::Armor(_) => effects.armor_percent += total,
+            TalentGrant::AttackSpeed(_) => effects.attack_speed_percent += total,
+            TalentGrant::CritChance(_) => effects.crit_chance += total,
+            TalentGrant::CritDamage(_) => effects.crit_damage += total,
+            TalentGrant::MoveSpeed(_) => effects.move_speed_percent += total,
+            TalentGrant::LifeRegen(_) => effects.life_regen += total,
+            TalentGrant::LootChance(_) => effects.loot_chance += total,
+            TalentGrant::Strength(_) => effects.strength += total,
+            TalentGrant::Dexterity(_) => effects.dexterity += total,
+            TalentGrant::Intelligence(_) => effects.intelligence += total,
+            TalentGrant::Vitality(_) => effects.vitality += total,
+        }
+    }
+
+    pub(crate) fn effect_line(self, points: u8) -> String {
+        let total = self.per_point() * points as f32;
+        match self {
+            TalentGrant::Damage(_) => format!("+{total:.0}% increased Damage"),
+            TalentGrant::Life(_) => format!("+{total:.0}% increased Life"),
+            TalentGrant::Armor(_) => format!("+{total:.0}% increased Armor"),
+            TalentGrant::AttackSpeed(_) => format!("+{total:.0}% increased Attack Speed"),
+            TalentGrant::CritChance(_) => format!("+{total:.1}% Critical Chance"),
+            TalentGrant::CritDamage(_) => format!("+{total:.0}% Critical Damage"),
+            TalentGrant::MoveSpeed(_) => format!("+{total:.0}% increased Move Speed"),
+            TalentGrant::LifeRegen(_) => format!("+{total:.1} Life Regen / s"),
+            TalentGrant::LootChance(_) => format!("+{total:.0}% Loot Chance"),
+            TalentGrant::Strength(_) => format!("+{total:.0} Strength"),
+            TalentGrant::Dexterity(_) => format!("+{total:.0} Dexterity"),
+            TalentGrant::Intelligence(_) => format!("+{total:.0} Intelligence"),
+            TalentGrant::Vitality(_) => format!("+{total:.0} Vitality"),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Default)]
+pub(crate) struct TalentEffects {
+    pub(crate) damage_percent: f32,
+    pub(crate) life_percent: f32,
+    pub(crate) armor_percent: f32,
+    pub(crate) attack_speed_percent: f32,
+    pub(crate) crit_chance: f32,
+    pub(crate) crit_damage: f32,
+    pub(crate) move_speed_percent: f32,
+    pub(crate) life_regen: f32,
+    pub(crate) loot_chance: f32,
+    pub(crate) strength: f32,
+    pub(crate) dexterity: f32,
+    pub(crate) intelligence: f32,
+    pub(crate) vitality: f32,
+}
+
+fn tn(
+    name: &'static str,
+    flavor: &'static str,
+    max_points: u8,
+    grant: TalentGrant,
+    requires: Option<usize>,
+    x: f32,
+    y: f32,
+) -> TalentNode {
+    TalentNode {
+        name,
+        flavor,
+        max_points,
+        grant,
+        requires,
+        position: Vec2::new(x, y),
+    }
+}
+
+fn knight_talents() -> Vec<TalentNode> {
+    vec![
+        tn(
+            "Bulwark Stance",
+            "Raise your shield and harden your guard.",
+            3,
+            TalentGrant::Armor(12.0),
+            None,
+            -250.0,
+            250.0,
+        ),
+        tn(
+            "Iron Discipline",
+            "Years of drills temper raw might.",
+            3,
+            TalentGrant::Strength(5.0),
+            Some(0),
+            -370.0,
+            175.0,
+        ),
+        tn(
+            "Crushing Blows",
+            "Every swing lands with crushing force.",
+            5,
+            TalentGrant::Damage(9.0),
+            Some(1),
+            -445.0,
+            95.0,
+        ),
+        tn(
+            "Bloodlust",
+            "The thrill of battle quickens your strikes.",
+            3,
+            TalentGrant::AttackSpeed(6.0),
+            Some(1),
+            -300.0,
+            95.0,
+        ),
+        tn(
+            "Executioner's Edge",
+            "Strike the weak point and end it.",
+            3,
+            TalentGrant::CritDamage(22.0),
+            Some(2),
+            -445.0,
+            5.0,
+        ),
+        tn(
+            "Warlord's Wrath",
+            "Lead the charge with unstoppable fury.",
+            1,
+            TalentGrant::Damage(18.0),
+            Some(4),
+            -445.0,
+            -78.0,
+        ),
+        tn(
+            "Stalwart Heart",
+            "A warrior's resolve fortifies the body.",
+            5,
+            TalentGrant::Life(9.0),
+            None,
+            -130.0,
+            175.0,
+        ),
+        tn(
+            "Plated Resolve",
+            "Layered plate turns aside the deadliest blows.",
+            3,
+            TalentGrant::Armor(16.0),
+            Some(6),
+            -55.0,
+            95.0,
+        ),
+        tn(
+            "Second Wind",
+            "Recover swiftly between clashes.",
+            3,
+            TalentGrant::LifeRegen(2.2),
+            Some(6),
+            -200.0,
+            95.0,
+        ),
+        tn(
+            "Unyielding",
+            "Nothing short of death will stop you.",
+            3,
+            TalentGrant::Vitality(6.0),
+            Some(7),
+            -55.0,
+            5.0,
+        ),
+        tn(
+            "Aegis Eternal",
+            "Become an unbreakable wall.",
+            1,
+            TalentGrant::Life(20.0),
+            Some(9),
+            -55.0,
+            -78.0,
+        ),
+    ]
+}
+
+fn ranger_talents() -> Vec<TalentNode> {
+    vec![
+        tn(
+            "Hunter's Focus",
+            "Sharpen your senses for the hunt.",
+            3,
+            TalentGrant::Dexterity(5.0),
+            None,
+            -250.0,
+            250.0,
+        ),
+        tn(
+            "Fleet Footed",
+            "Move like the wind through the wilds.",
+            3,
+            TalentGrant::MoveSpeed(8.0),
+            Some(0),
+            -370.0,
+            175.0,
+        ),
+        tn(
+            "Quickdraw",
+            "Loose arrows faster than the eye can follow.",
+            5,
+            TalentGrant::AttackSpeed(7.0),
+            Some(1),
+            -445.0,
+            95.0,
+        ),
+        tn(
+            "Deadeye",
+            "Never miss the mark.",
+            5,
+            TalentGrant::CritChance(5.0),
+            Some(1),
+            -300.0,
+            95.0,
+        ),
+        tn(
+            "Lethal Precision",
+            "Find the gap in any armor.",
+            3,
+            TalentGrant::CritDamage(20.0),
+            Some(3),
+            -300.0,
+            5.0,
+        ),
+        tn(
+            "Assassinate",
+            "One shot, one kill.",
+            1,
+            TalentGrant::CritChance(6.0),
+            Some(4),
+            -300.0,
+            -78.0,
+        ),
+        tn(
+            "Survivalist",
+            "Endure the harshest terrain.",
+            5,
+            TalentGrant::Life(7.0),
+            None,
+            -130.0,
+            175.0,
+        ),
+        tn(
+            "Evasion",
+            "Slip away before the blow lands.",
+            3,
+            TalentGrant::Armor(14.0),
+            Some(6),
+            -55.0,
+            95.0,
+        ),
+        tn(
+            "Cartographer's Eye",
+            "Spot treasure others overlook.",
+            3,
+            TalentGrant::LootChance(5.0),
+            Some(6),
+            -200.0,
+            95.0,
+        ),
+        tn(
+            "Windrunner",
+            "Outpace every foe on the field.",
+            3,
+            TalentGrant::MoveSpeed(10.0),
+            Some(7),
+            -55.0,
+            5.0,
+        ),
+        tn(
+            "Storm of Arrows",
+            "Unleash a relentless volley.",
+            1,
+            TalentGrant::AttackSpeed(12.0),
+            Some(9),
+            -55.0,
+            -78.0,
+        ),
+    ]
+}
+
+fn acolyte_talents() -> Vec<TalentNode> {
+    vec![
+        tn(
+            "Arcane Spark",
+            "Awaken the latent power within.",
+            3,
+            TalentGrant::Intelligence(5.0),
+            None,
+            -250.0,
+            250.0,
+        ),
+        tn(
+            "Kindled Mind",
+            "Focus your will into raw destruction.",
+            5,
+            TalentGrant::Damage(10.0),
+            Some(0),
+            -370.0,
+            175.0,
+        ),
+        tn(
+            "Searing Focus",
+            "Channel power into precise, burning strikes.",
+            5,
+            TalentGrant::CritChance(4.0),
+            Some(1),
+            -445.0,
+            95.0,
+        ),
+        tn(
+            "Empowered Strikes",
+            "Amplify each cast with surging energy.",
+            3,
+            TalentGrant::Damage(12.0),
+            Some(1),
+            -300.0,
+            95.0,
+        ),
+        tn(
+            "Cataclysm",
+            "Let devastation follow your every spell.",
+            3,
+            TalentGrant::CritDamage(25.0),
+            Some(3),
+            -300.0,
+            5.0,
+        ),
+        tn(
+            "Annihilation",
+            "Reduce your enemies to ash.",
+            1,
+            TalentGrant::Damage(20.0),
+            Some(4),
+            -300.0,
+            -78.0,
+        ),
+        tn(
+            "Mana Ward",
+            "Weave protective wards into your flesh.",
+            5,
+            TalentGrant::Life(8.0),
+            None,
+            -130.0,
+            175.0,
+        ),
+        tn(
+            "Runic Armor",
+            "Etch runes that deflect harm.",
+            3,
+            TalentGrant::Armor(15.0),
+            Some(6),
+            -55.0,
+            95.0,
+        ),
+        tn(
+            "Lifeweave",
+            "Knit your wounds with arcane threads.",
+            3,
+            TalentGrant::LifeRegen(2.5),
+            Some(6),
+            -200.0,
+            95.0,
+        ),
+        tn(
+            "Intellect Mastery",
+            "Master the deepest arcane truths.",
+            3,
+            TalentGrant::Intelligence(8.0),
+            Some(7),
+            -55.0,
+            5.0,
+        ),
+        tn(
+            "Eternal Font",
+            "Tap an endless wellspring of vitality.",
+            1,
+            TalentGrant::Life(18.0),
+            Some(9),
+            -55.0,
+            -78.0,
+        ),
+    ]
 }
 
 #[derive(Clone, Copy, Default)]
@@ -637,7 +1042,6 @@ pub(crate) struct PlayerProfile {
     pub(crate) level: u32,
     pub(crate) xp: u32,
     pub(crate) gold: u32,
-    pub(crate) talent_points: u8,
     pub(crate) allocated_talents: Vec<u8>,
     pub(crate) inventory: Vec<Option<ItemInstance>>,
     pub(crate) stash: Vec<Option<ItemInstance>>,
@@ -652,8 +1056,7 @@ impl Default for PlayerProfile {
             level: 1,
             xp: 0,
             gold: 0,
-            talent_points: 0,
-            allocated_talents: vec![0, 0, 0],
+            allocated_talents: Vec::new(),
             inventory: vec![None; INVENTORY_SIZE],
             stash: vec![None; STASH_SIZE],
             equipment: vec![None; EQUIPMENT_SLOT_COUNT],
@@ -673,9 +1076,113 @@ impl PlayerProfile {
 
     pub(crate) fn attributes(&self, database: &GameDatabase) -> Attributes {
         let class = self.class(database);
-        class
+        let mut attributes = class
             .base_attributes
-            .scaled_add(class.growth, self.level - 1)
+            .scaled_add(class.growth, self.level - 1);
+        let effects = self.talent_effects(database);
+        attributes.strength += effects.strength as u32;
+        attributes.dexterity += effects.dexterity as u32;
+        attributes.intelligence += effects.intelligence as u32;
+        attributes.vitality += effects.vitality as u32;
+        attributes
+    }
+
+    pub(crate) fn talent_tree<'a>(&self, database: &'a GameDatabase) -> &'a [TalentNode] {
+        &self.class(database).talents
+    }
+
+    pub(crate) fn ensure_talent_slots(&mut self, database: &GameDatabase) {
+        let len = self.class(database).talents.len();
+        if self.allocated_talents.len() != len {
+            self.allocated_talents.resize(len, 0);
+        }
+    }
+
+    pub(crate) fn total_talent_points(&self) -> u32 {
+        self.level.saturating_sub(1)
+    }
+
+    pub(crate) fn spent_talent_points(&self) -> u32 {
+        self.allocated_talents
+            .iter()
+            .map(|points| *points as u32)
+            .sum()
+    }
+
+    pub(crate) fn available_talent_points(&self) -> u32 {
+        self.total_talent_points()
+            .saturating_sub(self.spent_talent_points())
+    }
+
+    pub(crate) fn talent_points_in(&self, index: usize) -> u8 {
+        self.allocated_talents.get(index).copied().unwrap_or(0)
+    }
+
+    pub(crate) fn talent_unlocked(&self, database: &GameDatabase, index: usize) -> bool {
+        let Some(node) = self.talent_tree(database).get(index) else {
+            return false;
+        };
+        match node.requires {
+            Some(req) => self.talent_points_in(req) > 0,
+            None => true,
+        }
+    }
+
+    pub(crate) fn can_allocate_talent(&self, database: &GameDatabase, index: usize) -> bool {
+        let Some(node) = self.talent_tree(database).get(index) else {
+            return false;
+        };
+        self.available_talent_points() > 0
+            && self.talent_points_in(index) < node.max_points
+            && self.talent_unlocked(database, index)
+    }
+
+    pub(crate) fn allocate_talent(&mut self, database: &GameDatabase, index: usize) -> bool {
+        if !self.can_allocate_talent(database, index) {
+            return false;
+        }
+        self.allocated_talents[index] += 1;
+        true
+    }
+
+    pub(crate) fn can_deallocate_talent(&self, database: &GameDatabase, index: usize) -> bool {
+        if self.talent_points_in(index) == 0 {
+            return false;
+        }
+        if self.talent_points_in(index) == 1 {
+            for (other, node) in self.talent_tree(database).iter().enumerate() {
+                if node.requires == Some(index) && self.talent_points_in(other) > 0 {
+                    return false;
+                }
+            }
+        }
+        true
+    }
+
+    pub(crate) fn deallocate_talent(&mut self, database: &GameDatabase, index: usize) -> bool {
+        if !self.can_deallocate_talent(database, index) {
+            return false;
+        }
+        self.allocated_talents[index] -= 1;
+        true
+    }
+
+    pub(crate) fn reset_talents(&mut self) {
+        for points in self.allocated_talents.iter_mut() {
+            *points = 0;
+        }
+    }
+
+    pub(crate) fn talent_effects(&self, database: &GameDatabase) -> TalentEffects {
+        let mut effects = TalentEffects::default();
+        for (index, node) in self.class(database).talents.iter().enumerate() {
+            let points = self.talent_points_in(index);
+            if points == 0 {
+                continue;
+            }
+            node.grant.apply(&mut effects, points as f32);
+        }
+        effects
     }
 
     pub(crate) fn derived_stats(&self, database: &GameDatabase) -> DerivedStats {
@@ -701,25 +1208,12 @@ impl PlayerProfile {
             item_health_regen += item.rolls.health_regen;
         }
 
-        let mut damage_multiplier = 1.0;
-        let mut health_multiplier = 1.0;
-        let mut loot_bonus = 0.0;
-        for (index, points) in self.allocated_talents.iter().enumerate() {
-            if *points == 0 {
-                continue;
-            }
-            match database.talents[index].grant {
-                TalentGrant::DamagePercent(percent) => {
-                    damage_multiplier += percent * *points as f32 / 100.0;
-                }
-                TalentGrant::HealthPercent(percent) => {
-                    health_multiplier += percent * *points as f32 / 100.0;
-                }
-                TalentGrant::LootChance(percent) => {
-                    loot_bonus += percent * *points as f32;
-                }
-            }
-        }
+        let talents = self.talent_effects(database);
+        let damage_multiplier = 1.0 + talents.damage_percent / 100.0;
+        let health_multiplier = 1.0 + talents.life_percent / 100.0;
+        let armor_multiplier = 1.0 + talents.armor_percent / 100.0;
+        let move_multiplier = 1.0 + talents.move_speed_percent / 100.0;
+        let loot_bonus = talents.loot_chance;
 
         let max_health = (82.0
             + attributes.vitality as f32 * 6.3
@@ -732,18 +1226,23 @@ impl PlayerProfile {
             + attributes.intelligence as f32 * 0.18
             + item_damage)
             * damage_multiplier;
-        let armor = class.base_armor + attributes.strength as f32 * 0.30 + item_armor;
+        let armor =
+            (class.base_armor + attributes.strength as f32 * 0.30 + item_armor) * armor_multiplier;
         let attacks_per_second = ((class.attacks_per_second + attributes.dexterity as f32 * 0.004)
-            * (1.0 + item_attack_speed / 100.0))
+            * (1.0 + (item_attack_speed + talents.attack_speed_percent) / 100.0))
             .clamp(0.45, 5.0);
         let crit_chance =
-            (5.0 + attributes.dexterity as f32 * 0.08 + item_crit_chance).clamp(0.0, 75.0);
+            (5.0 + attributes.dexterity as f32 * 0.08 + item_crit_chance + talents.crit_chance)
+                .clamp(0.0, 75.0);
         let crit_damage =
-            (50.0 + attributes.strength as f32 * 0.20 + item_crit_damage).clamp(0.0, 350.0);
-        let move_speed = (PLAYER_SPEED + attributes.dexterity as f32 * 0.28 + item_move_speed)
+            (50.0 + attributes.strength as f32 * 0.20 + item_crit_damage + talents.crit_damage)
+                .clamp(0.0, 350.0);
+        let move_speed = ((PLAYER_SPEED + attributes.dexterity as f32 * 0.28 + item_move_speed)
+            * move_multiplier)
             .clamp(40.0, 260.0);
         let health_regeneration =
-            (1.2 + attributes.vitality as f32 * 0.06 + item_health_regen).clamp(0.0, 40.0);
+            (1.2 + attributes.vitality as f32 * 0.06 + item_health_regen + talents.life_regen)
+                .clamp(0.0, 40.0);
 
         DerivedStats {
             max_health,
@@ -762,35 +1261,15 @@ impl PlayerProfile {
         210 + self.level.pow(2) * 80
     }
 
-    pub(crate) fn gain_xp(&mut self, xp: u32, database: &GameDatabase) -> bool {
+    pub(crate) fn gain_xp(&mut self, xp: u32, _database: &GameDatabase) -> bool {
         let mut leveled = false;
         self.xp += xp;
         while self.xp >= self.xp_to_next_level() {
             self.xp -= self.xp_to_next_level();
             self.level += 1;
-            self.talent_points += 1;
             leveled = true;
         }
-        if leveled {
-            self.auto_allocate_talents(database);
-        }
         leveled
-    }
-
-    fn auto_allocate_talents(&mut self, database: &GameDatabase) {
-        while self.talent_points > 0 {
-            let Some(index) = self
-                .allocated_talents
-                .iter()
-                .enumerate()
-                .find(|(index, points)| **points < database.talents[*index].max_points)
-                .map(|(index, _)| index)
-            else {
-                break;
-            };
-            self.allocated_talents[index] += 1;
-            self.talent_points -= 1;
-        }
     }
 
     pub(crate) fn add_item(&mut self, item: ItemInstance) -> ItemDestination {
