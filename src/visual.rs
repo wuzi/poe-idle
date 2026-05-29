@@ -20,6 +20,8 @@ pub(crate) fn setup(
     commands.spawn((Camera2d, MainCamera));
     spawn_background(&mut commands, &database.maps[run.map_index]);
 
+    profile.ensure_talent_slots(&database);
+    seed_starting_equipment(&mut profile, &database);
     let stats = profile.derived_stats(&database);
     let class = profile.class(&database);
     let player = spawn_placeholder_actor(
@@ -39,10 +41,8 @@ pub(crate) fn setup(
         ),
     );
     spawn_health_bar(&mut commands, player, 68.0, 50.0, false);
-    profile.ensure_talent_slots(&database);
     let talents = profile.class(&database).talents.clone();
     spawn_screen_layout(&mut commands, &talents);
-    seed_starting_equipment(&mut profile, &database);
     begin_current_map(&mut run, &database);
 }
 

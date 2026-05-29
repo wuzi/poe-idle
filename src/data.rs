@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use serde::{Deserialize, Serialize};
 
 use crate::constants::{
     CRAFTING_SLOT_COUNT, EQUIPMENT_SLOT_COUNT, INVENTORY_SIZE, PLAYER_SPEED, STASH_SIZE,
@@ -265,8 +266,9 @@ impl Default for GameDatabase {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) enum ClassId {
+    #[default]
     Knight,
     Ranger,
     Acolyte,
@@ -520,7 +522,7 @@ impl ItemSlot {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct ItemInstance {
     pub(crate) def_id: usize,
     pub(crate) rarity: Rarity,
@@ -529,7 +531,7 @@ pub(crate) struct ItemInstance {
     pub(crate) rolls: ItemStatRolls,
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, Serialize, Deserialize)]
 pub(crate) struct ItemStatRolls {
     pub(crate) damage: f32,
     pub(crate) armor: f32,
@@ -541,7 +543,7 @@ pub(crate) struct ItemStatRolls {
     pub(crate) health_regen: f32,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) enum Rarity {
     Common,
     Uncommon,
@@ -1049,7 +1051,8 @@ impl Attributes {
     }
 }
 
-#[derive(Resource)]
+#[derive(Resource, Serialize, Deserialize)]
+#[serde(default)]
 pub(crate) struct PlayerProfile {
     pub(crate) class_id: ClassId,
     pub(crate) level: u32,
@@ -1061,6 +1064,7 @@ pub(crate) struct PlayerProfile {
     pub(crate) crafting: Vec<Option<ItemInstance>>,
     pub(crate) equipment: Vec<Option<ItemInstance>>,
     pub(crate) respawns: u32,
+    pub(crate) starter_items_seeded: bool,
 }
 
 impl Default for PlayerProfile {
@@ -1076,6 +1080,7 @@ impl Default for PlayerProfile {
             crafting: vec![None; CRAFTING_SLOT_COUNT],
             equipment: vec![None; EQUIPMENT_SLOT_COUNT],
             respawns: 0,
+            starter_items_seeded: false,
         }
     }
 }
@@ -1596,6 +1601,14 @@ impl Default for LootRng {
 }
 
 impl LootRng {
+    pub(crate) fn from_state(state: u64) -> Self {
+        Self { state }
+    }
+
+    pub(crate) fn state(&self) -> u64 {
+        self.state
+    }
+
     fn next_u32(&mut self) -> u32 {
         self.state = self
             .state
@@ -1618,7 +1631,11 @@ impl LootRng {
 }
 
 pub(crate) fn seed_starting_equipment(profile: &mut PlayerProfile, database: &GameDatabase) {
+    if profile.starter_items_seeded {
+        return;
+    }
     if profile.equipment.iter().any(Option::is_some) {
+        profile.starter_items_seeded = true;
         return;
     }
 
@@ -1628,6 +1645,7 @@ pub(crate) fn seed_starting_equipment(profile: &mut PlayerProfile, database: &Ga
     let shield_slot = database.items[shield.def_id].slot.index();
     profile.equipment[weapon_slot] = Some(weapon);
     profile.equipment[shield_slot] = Some(shield);
+    profile.starter_items_seeded = true;
 }
 
 pub(crate) fn roll_item(

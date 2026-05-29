@@ -2,11 +2,12 @@ use bevy::prelude::*;
 
 use crate::components::UiState;
 use crate::constants::{WINDOW_HEIGHT, WINDOW_WIDTH};
-use crate::data::{GameDatabase, LootRng, PlayerProfile, RunState};
+use crate::data::GameDatabase;
 use crate::gameplay::{
     enemies_attack, handle_map_transitions, move_enemies, move_player, player_attack,
     regenerate_player_health, resolve_combat_outcomes, spawn_enemy_packs,
 };
+use crate::save::{autosave_game, load_saved_game, save_on_exit};
 use crate::ui::{
     handle_bottom_buttons, handle_crafting_input, handle_inventory_input, handle_portal_button,
     handle_talent_panel, sync_character_panel, sync_crafting_panel, sync_dragged_item_visual,
@@ -19,12 +20,22 @@ use crate::visual::{
 };
 
 pub(crate) fn run() {
+    let database = GameDatabase::default();
+    let loaded_game = load_saved_game(&database);
+    if loaded_game.loaded_from_disk {
+        eprintln!(
+            "Loaded save from {}",
+            loaded_game.save_state.path().display()
+        );
+    }
+
     App::new()
         .insert_resource(ClearColor(Color::srgb(0.05, 0.07, 0.08)))
-        .insert_resource(GameDatabase::default())
-        .insert_resource(PlayerProfile::default())
-        .insert_resource(RunState::default())
-        .insert_resource(LootRng::default())
+        .insert_resource(database)
+        .insert_resource(loaded_game.profile)
+        .insert_resource(loaded_game.run)
+        .insert_resource(loaded_game.rng)
+        .insert_resource(loaded_game.save_state)
         .insert_resource(UiState::default())
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
@@ -73,8 +84,10 @@ pub(crate) fn run() {
                     sync_hud_text,
                 )
                     .chain(),
+                autosave_game,
             )
                 .chain(),
         )
+        .add_systems(Last, save_on_exit)
         .run();
 }

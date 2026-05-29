@@ -12,6 +12,7 @@ mod components;
 mod constants;
 mod data;
 mod gameplay;
+mod save;
 mod ui;
 mod visual;
 
