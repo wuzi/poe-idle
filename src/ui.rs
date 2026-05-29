@@ -3,26 +3,29 @@ use bevy::sprite::Anchor;
 
 use crate::components::{
     ActivePanel, BottomButton, BottomButtonLabel, CharacterPanelPiece, CharacterPanelText,
-    DraggedItem, DraggedItemVisual, EquippedTooltipBackground, EquippedTooltipText, Health,
-    HudText, InventoryCell, InventoryCellLabel, InventoryPanelPiece, InventorySource,
-    ItemTooltipBackground, ItemTooltipText, Player, PortalPanelPiece, PortalToggleButton,
-    PortalToggleButtonLabel, ProgressBarFill, ScreenFixed, TalentConnector, TalentHeaderText,
-    TalentInfoText, TalentNodeButton, TalentNodeLabel, TalentPanelPiece, TalentResetButton,
-    TalentResetLabel, UiState,
+    CraftingButton, CraftingButtonLabel, CraftingInfoText, CraftingPanelPiece, DraggedItem,
+    DraggedItemVisual, EquippedTooltipBackground, EquippedTooltipText, Health, HudText,
+    InventoryCell, InventoryCellLabel, InventoryPanelPiece, InventorySource, ItemTooltipBackground,
+    ItemTooltipText, Player, PortalPanelPiece, PortalToggleButton, PortalToggleButtonLabel,
+    ProgressBarFill, ScreenFixed, TalentConnector, TalentHeaderText, TalentInfoText,
+    TalentNodeButton, TalentNodeLabel, TalentPanelPiece, TalentResetButton, TalentResetLabel,
+    UiState,
 };
 use crate::constants::{
-    BOTTOM_BUTTON_SIZE, INVENTORY_CELL_SIZE, MAP_PROGRESS_LEFT, MAP_PROGRESS_WIDTH, MAP_PROGRESS_Y,
-    TOOLTIP_PADDING, TOOLTIP_WIDTH, WINDOW_HEIGHT, WINDOW_WIDTH,
+    BOTTOM_BUTTON_SIZE, CRAFTING_SLOT_COUNT, INVENTORY_CELL_SIZE, MAP_PROGRESS_LEFT,
+    MAP_PROGRESS_WIDTH, MAP_PROGRESS_Y, TOOLTIP_PADDING, TOOLTIP_WIDTH, WINDOW_HEIGHT,
+    WINDOW_WIDTH,
 };
 
 const TOOLTIP_LINE_HEIGHT: f32 = 17.0;
 const TOOLTIP_GAP: f32 = 10.0;
 const TOOLTIP_WRAP_CHARS: usize = 32;
 use crate::data::{
-    GameDatabase, ItemInstance, ItemLocation, ItemSlot, PlayerProfile, Rarity, RunState, RunStatus,
-    TalentNode, item_armor_bonus, item_attack_speed_bonus, item_crit_chance_bonus,
-    item_crit_damage_bonus, item_damage_bonus, item_health_regen_bonus, item_life_bonus,
-    item_move_speed_bonus, item_slot_effect, rarity_color, rarity_effect,
+    CraftingDestination, CraftingPreview, CraftingResult, GameDatabase, ItemInstance, ItemLocation,
+    ItemSlot, LootRng, PlayerProfile, Rarity, RunState, RunStatus, TalentNode, describe_item,
+    item_armor_bonus, item_attack_speed_bonus, item_crit_chance_bonus, item_crit_damage_bonus,
+    item_damage_bonus, item_health_regen_bonus, item_life_bonus, item_move_speed_bonus,
+    item_slot_effect, rarity_color, rarity_effect,
 };
 
 pub(crate) fn spawn_screen_layout(commands: &mut Commands, talents: &[TalentNode]) {
@@ -110,9 +113,19 @@ pub(crate) fn spawn_screen_layout(commands: &mut Commands, talents: &[TalentNode
     spawn_inventory_panel_label(commands, "Inventory", Vec3::new(-134.0, 54.0, 35.0), 15.0);
     spawn_inventory_panel_label(commands, "Equipped", Vec3::new(-134.0, 286.0, 35.0), 15.0);
 
-    spawn_inventory_cells(commands, InventorySource::Stash, -532.0, 270.0, 6, 5, 46.0);
     spawn_inventory_cells(
         commands,
+        ActivePanel::Inventory,
+        InventorySource::Stash,
+        -532.0,
+        270.0,
+        6,
+        5,
+        46.0,
+    );
+    spawn_inventory_cells(
+        commands,
+        ActivePanel::Inventory,
         InventorySource::Equipment,
         -134.0,
         250.0,
@@ -122,6 +135,7 @@ pub(crate) fn spawn_screen_layout(commands: &mut Commands, talents: &[TalentNode
     );
     spawn_inventory_cells(
         commands,
+        ActivePanel::Inventory,
         InventorySource::Inventory,
         -134.0,
         18.0,
@@ -133,22 +147,29 @@ pub(crate) fn spawn_screen_layout(commands: &mut Commands, talents: &[TalentNode
         commands,
         ActivePanel::Character,
         "HERO",
-        Vec3::new(-165.0, -338.0, 35.0),
+        Vec3::new(-220.0, -338.0, 35.0),
     );
     spawn_bottom_button(
         commands,
         ActivePanel::Inventory,
         "STASH",
-        Vec3::new(-55.0, -338.0, 35.0),
+        Vec3::new(-110.0, -338.0, 35.0),
+    );
+    spawn_bottom_button(
+        commands,
+        ActivePanel::Crafting,
+        "CRAFT",
+        Vec3::new(0.0, -338.0, 35.0),
     );
     spawn_bottom_button(
         commands,
         ActivePanel::Talents,
         "TALENTS",
-        Vec3::new(55.0, -338.0, 35.0),
+        Vec3::new(110.0, -338.0, 35.0),
     );
-    spawn_portal_toggle_button(commands, "PORTAL", Vec3::new(165.0, -338.0, 35.0));
+    spawn_portal_toggle_button(commands, "PORTAL", Vec3::new(220.0, -338.0, 35.0));
     spawn_character_panel(commands);
+    spawn_crafting_panel(commands);
     spawn_talent_panel(commands, talents);
     spawn_item_tooltip(commands);
     spawn_dragged_item_visual(commands);
@@ -230,6 +251,7 @@ fn spawn_inventory_panel_frame(commands: &mut Commands, center: Vec3, title: &'s
 
 fn spawn_inventory_cells(
     commands: &mut Commands,
+    panel: ActivePanel,
     source: InventorySource,
     start_x: f32,
     start_y: f32,
@@ -237,15 +259,19 @@ fn spawn_inventory_cells(
     rows: usize,
     step: f32,
 ) {
+    let cell_z = match panel {
+        ActivePanel::Crafting => 48.0,
+        _ => 34.0,
+    };
     for row in 0..rows {
         for column in 0..columns {
             let index = row * columns + column;
             let offset = Vec3::new(
                 start_x + column as f32 * step,
                 start_y - row as f32 * step,
-                34.0,
+                cell_z,
             );
-            commands.spawn((
+            let mut cell = commands.spawn((
                 Sprite::from_color(
                     Color::srgba(0.10, 0.10, 0.11, 0.98),
                     Vec2::splat(INVENTORY_CELL_SIZE),
@@ -253,11 +279,15 @@ fn spawn_inventory_cells(
                 Transform::from_translation(offset),
                 Visibility::Hidden,
                 ScreenFixed { offset },
-                InventoryCell { source, index },
-                InventoryPanelPiece,
+                InventoryCell {
+                    panel,
+                    source,
+                    index,
+                },
             ));
+            tag_inventory_cell_panel(&mut cell, panel);
 
-            commands.spawn((
+            let mut label = commands.spawn((
                 Text2d::new(""),
                 TextFont {
                     font_size: 9.0,
@@ -271,10 +301,26 @@ fn spawn_inventory_cells(
                 ScreenFixed {
                     offset: offset + Vec3::new(0.0, 0.0, 1.0),
                 },
-                InventoryCellLabel { source, index },
-                InventoryPanelPiece,
+                InventoryCellLabel {
+                    panel,
+                    source,
+                    index,
+                },
             ));
+            tag_inventory_cell_panel(&mut label, panel);
         }
+    }
+}
+
+fn tag_inventory_cell_panel(entity: &mut EntityCommands, panel: ActivePanel) {
+    match panel {
+        ActivePanel::Inventory => {
+            entity.insert(InventoryPanelPiece);
+        }
+        ActivePanel::Crafting => {
+            entity.insert(CraftingPanelPiece);
+        }
+        _ => {}
     }
 }
 
@@ -382,6 +428,193 @@ fn spawn_inventory_panel_label(
         Visibility::Hidden,
         ScreenFixed { offset },
         InventoryPanelPiece,
+    ));
+}
+
+fn spawn_crafting_button(commands: &mut Commands, offset: Vec3) {
+    let size = Vec2::new(92.0, 34.0);
+    commands.spawn((
+        Sprite::from_color(Color::srgba(0.30, 0.11, 0.04, 0.98), size),
+        Transform::from_translation(offset),
+        Visibility::Hidden,
+        ScreenFixed { offset },
+        CraftingPanelPiece,
+        CraftingButton { size },
+    ));
+
+    let text_offset = offset + Vec3::new(0.0, 5.0, 1.0);
+    commands.spawn((
+        Text2d::new("CRAFT"),
+        TextFont {
+            font_size: 12.0,
+            ..default()
+        },
+        TextColor(Color::srgb(0.96, 0.70, 0.32)),
+        TextLayout::new_with_justify(Justify::Center),
+        Anchor::CENTER,
+        Transform::from_translation(text_offset),
+        Visibility::Hidden,
+        ScreenFixed {
+            offset: text_offset,
+        },
+        CraftingPanelPiece,
+        CraftingButtonLabel,
+    ));
+}
+
+fn spawn_crafting_info_text(commands: &mut Commands, offset: Vec3) {
+    commands.spawn((
+        Text2d::new(""),
+        TextFont {
+            font_size: 10.5,
+            ..default()
+        },
+        TextColor(Color::srgb(0.78, 0.72, 0.62)),
+        TextLayout::new_with_justify(Justify::Left),
+        Anchor::TOP_LEFT,
+        Transform::from_translation(offset),
+        Visibility::Hidden,
+        ScreenFixed { offset },
+        CraftingPanelPiece,
+        CraftingInfoText,
+    ));
+}
+
+fn spawn_crafting_panel(commands: &mut Commands) {
+    spawn_crafting_panel_rect(
+        commands,
+        Vec3::new(-150.0, 90.0, 42.0),
+        Vec2::new(724.0, 540.0),
+        Color::srgba(0.025, 0.025, 0.025, 0.98),
+    );
+    spawn_crafting_panel_rect(
+        commands,
+        Vec3::new(-150.0, 90.0, 43.0),
+        Vec2::new(712.0, 528.0),
+        Color::srgba(0.18, 0.17, 0.16, 0.97),
+    );
+    spawn_crafting_panel_rect(
+        commands,
+        Vec3::new(-150.0, 70.0, 44.0),
+        Vec2::new(696.0, 466.0),
+        Color::srgba(0.09, 0.085, 0.08, 0.97),
+    );
+    spawn_crafting_panel_rect(
+        commands,
+        Vec3::new(-150.0, 328.0, 45.0),
+        Vec2::new(710.0, 40.0),
+        Color::srgba(0.56, 0.10, 0.07, 0.98),
+    );
+    spawn_crafting_panel_rect(
+        commands,
+        Vec3::new(-150.0, 305.0, 46.0),
+        Vec2::new(710.0, 4.0),
+        Color::srgba(0.98, 0.56, 0.12, 0.92),
+    );
+    spawn_crafting_panel_rect(
+        commands,
+        Vec3::new(-142.0, 70.0, 46.0),
+        Vec2::new(3.0, 430.0),
+        Color::srgba(0.70, 0.50, 0.24, 0.62),
+    );
+    spawn_crafting_panel_label(
+        commands,
+        "CRAFTING",
+        Vec3::new(-490.0, 342.0, 48.0),
+        22.0,
+        Color::srgb(1.0, 0.72, 0.20),
+    );
+    spawn_crafting_panel_label(
+        commands,
+        "STASH",
+        Vec3::new(-500.0, 280.0, 48.0),
+        14.0,
+        Color::srgb(0.96, 0.70, 0.32),
+    );
+    spawn_inventory_cells(
+        commands,
+        ActivePanel::Crafting,
+        InventorySource::Stash,
+        -496.0,
+        240.0,
+        6,
+        5,
+        46.0,
+    );
+    spawn_crafting_panel_label(
+        commands,
+        "INVENTORY",
+        Vec3::new(-500.0, 20.0, 48.0),
+        14.0,
+        Color::srgb(0.96, 0.70, 0.32),
+    );
+    spawn_inventory_cells(
+        commands,
+        ActivePanel::Crafting,
+        InventorySource::Inventory,
+        -496.0,
+        -18.0,
+        6,
+        4,
+        46.0,
+    );
+    spawn_crafting_panel_label(
+        commands,
+        "RARITY UPGRADE",
+        Vec3::new(-110.0, 240.0, 48.0),
+        16.0,
+        Color::srgb(0.96, 0.70, 0.32),
+    );
+    spawn_crafting_panel_rect(
+        commands,
+        Vec3::new(34.0, 160.0, 46.0),
+        Vec2::new(312.0, 128.0),
+        Color::srgba(0.13, 0.115, 0.10, 0.96),
+    );
+    spawn_inventory_cells(
+        commands,
+        ActivePanel::Crafting,
+        InventorySource::Crafting,
+        -92.0,
+        182.0,
+        CRAFTING_SLOT_COUNT,
+        1,
+        46.0,
+    );
+    spawn_crafting_button(commands, Vec3::new(34.0, 120.0, 48.0));
+    spawn_crafting_info_text(commands, Vec3::new(-108.0, 82.0, 48.0));
+}
+
+fn spawn_crafting_panel_rect(commands: &mut Commands, offset: Vec3, size: Vec2, color: Color) {
+    commands.spawn((
+        Sprite::from_color(color, size),
+        Transform::from_translation(offset),
+        Visibility::Hidden,
+        ScreenFixed { offset },
+        CraftingPanelPiece,
+    ));
+}
+
+fn spawn_crafting_panel_label(
+    commands: &mut Commands,
+    label: &'static str,
+    offset: Vec3,
+    font_size: f32,
+    color: Color,
+) {
+    commands.spawn((
+        Text2d::new(label),
+        TextFont {
+            font_size,
+            ..default()
+        },
+        TextColor(color),
+        TextLayout::new_with_justify(Justify::Left),
+        Anchor::TOP_LEFT,
+        Transform::from_translation(offset),
+        Visibility::Hidden,
+        ScreenFixed { offset },
+        CraftingPanelPiece,
     ));
 }
 
@@ -1218,10 +1451,14 @@ pub(crate) fn handle_inventory_input(
     window_query: Query<&Window>,
     cell_query: Query<(&InventoryCell, &ScreenFixed)>,
 ) {
-    if ui_state.active_panel != ActivePanel::Inventory {
+    if !matches!(
+        ui_state.active_panel,
+        ActivePanel::Inventory | ActivePanel::Crafting
+    ) {
         ui_state.dragged_item = None;
         return;
     }
+    let active_panel = ui_state.active_panel;
 
     let Some(cursor_offset) = cursor_offset(&window_query) else {
         if mouse.just_released(MouseButton::Left) {
@@ -1229,12 +1466,19 @@ pub(crate) fn handle_inventory_input(
         }
         return;
     };
-    let hovered_cell = hovered_inventory_cell(cursor_offset, &cell_query);
+    let hovered_cell = hovered_inventory_cell(cursor_offset, &cell_query, active_panel);
 
     if mouse.just_pressed(MouseButton::Right) {
         if let Some((source, index)) = hovered_cell {
             ui_state.dragged_item = None;
-            profile.use_item_at(item_location(source, index), &database);
+            let moved = if active_panel == ActivePanel::Crafting {
+                use_item_on_crafting_panel(&mut profile, source, index, &database)
+            } else {
+                profile.use_item_at(item_location(source, index), &database)
+            };
+            if moved {
+                ui_state.crafting_message.clear();
+            }
         }
         return;
     }
@@ -1255,13 +1499,110 @@ pub(crate) fn handle_inventory_input(
     if mouse.just_released(MouseButton::Left) {
         if let Some(dragged_item) = ui_state.dragged_item.take() {
             if let Some((target_source, target_index)) = hovered_cell {
-                profile.move_item(
+                if profile.move_item(
                     item_location(dragged_item.source, dragged_item.index),
                     item_location(target_source, target_index),
                     &database,
-                );
+                ) {
+                    ui_state.crafting_message.clear();
+                }
             }
         }
+    }
+}
+
+pub(crate) fn handle_crafting_input(
+    mut ui_state: ResMut<UiState>,
+    database: Res<GameDatabase>,
+    mut profile: ResMut<PlayerProfile>,
+    mut rng: ResMut<LootRng>,
+    mouse: Res<ButtonInput<MouseButton>>,
+    window_query: Query<&Window>,
+    button_query: Query<(&CraftingButton, &ScreenFixed)>,
+) {
+    if ui_state.active_panel != ActivePanel::Crafting || ui_state.dragged_item.is_some() {
+        return;
+    }
+
+    let Some(cursor_offset) = cursor_offset(&window_query) else {
+        return;
+    };
+
+    let button_hovered = button_query.iter().any(|(button, fixed)| {
+        let half_size = button.size * 0.5;
+        (cursor_offset.x - fixed.offset.x).abs() <= half_size.x
+            && (cursor_offset.y - fixed.offset.y).abs() <= half_size.y
+    });
+
+    if !button_hovered || !mouse.just_pressed(MouseButton::Left) {
+        return;
+    }
+
+    ui_state.crafting_message = match profile.craft_rarity_upgrade(&database, &mut rng) {
+        CraftingResult::Crafted { item, destination } => format!(
+            "Crafted {}\nSent to {}",
+            describe_item(&item, &database),
+            crafting_destination_name(destination)
+        ),
+        CraftingResult::NeedsItems => "Add 5 matching items".to_string(),
+        CraftingResult::RarityMismatch => "Rarities must match".to_string(),
+        CraftingResult::MaxRarity => "Legendary cannot upgrade".to_string(),
+    };
+}
+
+pub(crate) fn sync_crafting_panel(
+    ui_state: Res<UiState>,
+    profile: Res<PlayerProfile>,
+    window_query: Query<&Window>,
+    mut visibility_query: Query<&mut Visibility, With<CraftingPanelPiece>>,
+    mut button_query: Query<(&CraftingButton, &ScreenFixed, &mut Sprite)>,
+    mut label_query: Query<&mut TextColor, With<CraftingButtonLabel>>,
+    mut info_query: Query<&mut Text2d, With<CraftingInfoText>>,
+) {
+    let is_visible = ui_state.active_panel == ActivePanel::Crafting;
+    for mut visibility in &mut visibility_query {
+        *visibility = if is_visible {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
+    }
+
+    let is_ready = matches!(
+        profile.crafting_upgrade_preview(),
+        CraftingPreview::Ready { .. }
+    );
+    let cursor_offset = cursor_offset(&window_query);
+
+    for (button, fixed, mut sprite) in &mut button_query {
+        let hovered = is_visible
+            && cursor_offset.is_some_and(|cursor| {
+                let half_size = button.size * 0.5;
+                (cursor.x - fixed.offset.x).abs() <= half_size.x
+                    && (cursor.y - fixed.offset.y).abs() <= half_size.y
+            });
+
+        sprite.color = if is_ready && hovered {
+            Color::srgba(0.92, 0.50, 0.08, 0.98)
+        } else if is_ready {
+            Color::srgba(0.56, 0.18, 0.05, 0.98)
+        } else if hovered {
+            Color::srgba(0.34, 0.19, 0.12, 0.98)
+        } else {
+            Color::srgba(0.18, 0.13, 0.10, 0.98)
+        };
+    }
+
+    for mut text_color in &mut label_query {
+        text_color.0 = if is_ready {
+            Color::srgb(0.96, 0.70, 0.32)
+        } else {
+            Color::srgba(0.64, 0.58, 0.48, 0.78)
+        };
+    }
+
+    for mut text in &mut info_query {
+        text.0 = crafting_status_text(&profile, &ui_state);
     }
 }
 
@@ -1282,7 +1623,10 @@ pub(crate) fn sync_dragged_item_visual(
         *visibility = Visibility::Hidden;
         return;
     };
-    if ui_state.active_panel != ActivePanel::Inventory {
+    if !matches!(
+        ui_state.active_panel,
+        ActivePanel::Inventory | ActivePanel::Crafting
+    ) {
         *visibility = Visibility::Hidden;
         return;
     }
@@ -1452,7 +1796,11 @@ pub(crate) fn update_item_tooltip(
         return;
     };
 
-    if ui_state.active_panel != ActivePanel::Inventory || ui_state.dragged_item.is_some() {
+    if !matches!(
+        ui_state.active_panel,
+        ActivePanel::Inventory | ActivePanel::Crafting
+    ) || ui_state.dragged_item.is_some()
+    {
         *background_visibility = Visibility::Hidden;
         *text_visibility = Visibility::Hidden;
         *equipped_background_visibility = Visibility::Hidden;
@@ -1479,7 +1827,11 @@ pub(crate) fn update_item_tooltip(
         cursor_position.x - WINDOW_WIDTH as f32 * 0.5,
         WINDOW_HEIGHT as f32 * 0.5 - cursor_position.y,
     );
+    let active_panel = ui_state.active_panel;
     let hovered_item = cell_query.iter().find_map(|(cell, fixed)| {
+        if cell.panel != active_panel {
+            return None;
+        }
         let half_cell = INVENTORY_CELL_SIZE * 0.5;
         let within_x = (cursor_offset.x - fixed.offset.x).abs() <= half_cell;
         let within_y = (cursor_offset.y - fixed.offset.y).abs() <= half_cell;
@@ -1627,6 +1979,7 @@ pub(crate) fn sync_inventory_grid(
 
     for (label, mut text, mut text_color) in &mut label_query {
         let cell = InventoryCell {
+            panel: label.panel,
             source: label.source,
             index: label.index,
         };
@@ -1651,6 +2004,9 @@ pub(crate) fn sync_inventory_grid(
                 .unwrap_or("")
                 .into();
             text_color.0 = Color::srgba(0.58, 0.53, 0.45, 0.62);
+        } else if label.source == InventorySource::Crafting {
+            text.0 = format!("{}", label.index + 1);
+            text_color.0 = Color::srgba(0.58, 0.53, 0.45, 0.62);
         } else {
             text.0.clear();
         }
@@ -1671,8 +2027,12 @@ fn cursor_offset(window_query: &Query<&Window>) -> Option<Vec2> {
 fn hovered_inventory_cell(
     cursor_offset: Vec2,
     cell_query: &Query<(&InventoryCell, &ScreenFixed)>,
+    active_panel: ActivePanel,
 ) -> Option<(InventorySource, usize)> {
     cell_query.iter().find_map(|(cell, fixed)| {
+        if cell.panel != active_panel {
+            return None;
+        }
         let half_cell = INVENTORY_CELL_SIZE * 0.5;
         let within_x = (cursor_offset.x - fixed.offset.x).abs() <= half_cell;
         let within_y = (cursor_offset.y - fixed.offset.y).abs() <= half_cell;
@@ -1688,7 +2048,61 @@ fn item_location(source: InventorySource, index: usize) -> ItemLocation {
     match source {
         InventorySource::Inventory => ItemLocation::Inventory(index),
         InventorySource::Stash => ItemLocation::Stash(index),
+        InventorySource::Crafting => ItemLocation::Crafting(index),
         InventorySource::Equipment => ItemLocation::Equipment(index),
+    }
+}
+
+fn crafting_status_text(profile: &PlayerProfile, ui_state: &UiState) -> String {
+    if !ui_state.crafting_message.is_empty() {
+        return ui_state.crafting_message.clone();
+    }
+
+    let filled = profile
+        .crafting
+        .iter()
+        .filter(|slot| slot.is_some())
+        .count();
+    match profile.crafting_upgrade_preview() {
+        CraftingPreview::Ready { from, to } => {
+            format!("Ready\n{} -> {}", from.name(), to.name())
+        }
+        CraftingPreview::NeedsItems => {
+            format!("{filled}/{CRAFTING_SLOT_COUNT} items\n5 matching rarity")
+        }
+        CraftingPreview::RarityMismatch => "Rarity mismatch\nUse one rarity".to_string(),
+        CraftingPreview::MaxRarity => "Legendary items\nCannot upgrade".to_string(),
+    }
+}
+
+fn use_item_on_crafting_panel(
+    profile: &mut PlayerProfile,
+    source: InventorySource,
+    index: usize,
+    database: &GameDatabase,
+) -> bool {
+    match source {
+        InventorySource::Inventory | InventorySource::Stash => {
+            let Some(crafting_index) = profile.crafting.iter().position(Option::is_none) else {
+                return false;
+            };
+            profile.move_item(
+                item_location(source, index),
+                ItemLocation::Crafting(crafting_index),
+                database,
+            )
+        }
+        InventorySource::Crafting => profile.use_item_at(ItemLocation::Crafting(index), database),
+        InventorySource::Equipment => profile.use_item_at(ItemLocation::Equipment(index), database),
+    }
+}
+
+fn crafting_destination_name(destination: CraftingDestination) -> &'static str {
+    match destination {
+        CraftingDestination::Inventory => "Inventory",
+        CraftingDestination::Stash => "Stash",
+        CraftingDestination::Cube => "Cube",
+        CraftingDestination::Lost => "Lost",
     }
 }
 
@@ -1724,6 +2138,7 @@ fn item_for_cell<'a>(cell: &InventoryCell, profile: &'a PlayerProfile) -> Option
     match cell.source {
         InventorySource::Inventory => profile.inventory.get(cell.index).and_then(Option::as_ref),
         InventorySource::Stash => profile.stash.get(cell.index).and_then(Option::as_ref),
+        InventorySource::Crafting => profile.crafting.get(cell.index).and_then(Option::as_ref),
         InventorySource::Equipment => profile.equipment.get(cell.index).and_then(Option::as_ref),
     }
 }

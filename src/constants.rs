@@ -11,6 +11,7 @@ pub(crate) const ENEMY_ATTACK_RANGE: f32 = 52.0;
 pub(crate) const INVENTORY_SIZE: usize = 24;
 pub(crate) const STASH_SIZE: usize = 30;
 pub(crate) const EQUIPMENT_SLOT_COUNT: usize = 8;
+pub(crate) const CRAFTING_SLOT_COUNT: usize = 5;
 pub(crate) const INVENTORY_CELL_SIZE: f32 = 38.0;
 pub(crate) const MAP_PROGRESS_LEFT: f32 = 254.0;
 pub(crate) const MAP_PROGRESS_WIDTH: f32 = 284.0;

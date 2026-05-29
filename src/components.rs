@@ -8,6 +8,7 @@ pub(crate) struct UiState {
     pub(crate) dragged_item: Option<DraggedItem>,
     pub(crate) portal_visible: bool,
     pub(crate) hovered_talent: Option<usize>,
+    pub(crate) crafting_message: String,
 }
 
 impl Default for UiState {
@@ -17,6 +18,7 @@ impl Default for UiState {
             dragged_item: None,
             portal_visible: true,
             hovered_talent: None,
+            crafting_message: String::new(),
         }
     }
 }
@@ -32,6 +34,7 @@ pub(crate) enum ActivePanel {
     None,
     Inventory,
     Character,
+    Crafting,
     Talents,
 }
 
@@ -116,6 +119,9 @@ pub(crate) struct PortalPanelPiece;
 pub(crate) struct TalentPanelPiece;
 
 #[derive(Component)]
+pub(crate) struct CraftingPanelPiece;
+
+#[derive(Component)]
 pub(crate) struct TalentNodeButton {
     pub(crate) index: usize,
     pub(crate) size: Vec2,
@@ -146,6 +152,17 @@ pub(crate) struct TalentResetButton {
 pub(crate) struct TalentResetLabel;
 
 #[derive(Component)]
+pub(crate) struct CraftingButton {
+    pub(crate) size: Vec2,
+}
+
+#[derive(Component)]
+pub(crate) struct CraftingButtonLabel;
+
+#[derive(Component)]
+pub(crate) struct CraftingInfoText;
+
+#[derive(Component)]
 pub(crate) enum CharacterPanelText {
     Header,
     Status,
@@ -158,12 +175,14 @@ pub(crate) enum CharacterPanelText {
 
 #[derive(Component)]
 pub(crate) struct InventoryCell {
+    pub(crate) panel: ActivePanel,
     pub(crate) source: InventorySource,
     pub(crate) index: usize,
 }
 
 #[derive(Component)]
 pub(crate) struct InventoryCellLabel {
+    pub(crate) panel: ActivePanel,
     pub(crate) source: InventorySource,
     pub(crate) index: usize,
 }
@@ -172,6 +191,7 @@ pub(crate) struct InventoryCellLabel {
 pub(crate) enum InventorySource {
     Inventory,
     Stash,
+    Crafting,
     Equipment,
 }
 

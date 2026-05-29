@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 
-use crate::constants::{EQUIPMENT_SLOT_COUNT, INVENTORY_SIZE, PLAYER_SPEED, STASH_SIZE};
+use crate::constants::{
+    CRAFTING_SLOT_COUNT, EQUIPMENT_SLOT_COUNT, INVENTORY_SIZE, PLAYER_SPEED, STASH_SIZE,
+};
 
 #[derive(Resource)]
 pub(crate) struct GameDatabase {
@@ -539,7 +541,7 @@ pub(crate) struct ItemStatRolls {
     pub(crate) health_regen: f32,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Rarity {
     Common,
     Uncommon,
@@ -569,6 +571,17 @@ impl Rarity {
             Rarity::Rare => 4,
             Rarity::Epic => 5,
             Rarity::Legendary => 7,
+        }
+    }
+
+    pub(crate) fn next(self) -> Option<Self> {
+        match self {
+            Rarity::Common => Some(Rarity::Uncommon),
+            Rarity::Uncommon => Some(Rarity::Magic),
+            Rarity::Magic => Some(Rarity::Rare),
+            Rarity::Rare => Some(Rarity::Epic),
+            Rarity::Epic => Some(Rarity::Legendary),
+            Rarity::Legendary => None,
         }
     }
 
@@ -1045,6 +1058,7 @@ pub(crate) struct PlayerProfile {
     pub(crate) allocated_talents: Vec<u8>,
     pub(crate) inventory: Vec<Option<ItemInstance>>,
     pub(crate) stash: Vec<Option<ItemInstance>>,
+    pub(crate) crafting: Vec<Option<ItemInstance>>,
     pub(crate) equipment: Vec<Option<ItemInstance>>,
     pub(crate) respawns: u32,
 }
@@ -1059,6 +1073,7 @@ impl Default for PlayerProfile {
             allocated_talents: Vec::new(),
             inventory: vec![None; INVENTORY_SIZE],
             stash: vec![None; STASH_SIZE],
+            crafting: vec![None; CRAFTING_SLOT_COUNT],
             equipment: vec![None; EQUIPMENT_SLOT_COUNT],
             respawns: 0,
         }
@@ -1286,10 +1301,89 @@ impl PlayerProfile {
         ItemDestination::Lost
     }
 
+    pub(crate) fn crafting_upgrade_preview(&self) -> CraftingPreview {
+        let Some(first_item) = self.crafting.first().and_then(Option::as_ref) else {
+            return CraftingPreview::NeedsItems;
+        };
+        let rarity = first_item.rarity;
+        let mut count = 0;
+
+        for slot in &self.crafting {
+            let Some(item) = slot else {
+                return CraftingPreview::NeedsItems;
+            };
+            count += 1;
+            if item.rarity != rarity {
+                return CraftingPreview::RarityMismatch;
+            }
+        }
+
+        if count != CRAFTING_SLOT_COUNT {
+            return CraftingPreview::NeedsItems;
+        }
+
+        let Some(next_rarity) = rarity.next() else {
+            return CraftingPreview::MaxRarity;
+        };
+
+        CraftingPreview::Ready {
+            from: rarity,
+            to: next_rarity,
+        }
+    }
+
+    pub(crate) fn craft_rarity_upgrade(
+        &mut self,
+        database: &GameDatabase,
+        rng: &mut LootRng,
+    ) -> CraftingResult {
+        let CraftingPreview::Ready { to, .. } = self.crafting_upgrade_preview() else {
+            return match self.crafting_upgrade_preview() {
+                CraftingPreview::NeedsItems => CraftingResult::NeedsItems,
+                CraftingPreview::RarityMismatch => CraftingResult::RarityMismatch,
+                CraftingPreview::MaxRarity => CraftingResult::MaxRarity,
+                CraftingPreview::Ready { .. } => unreachable!(),
+            };
+        };
+
+        let item_level = self
+            .crafting
+            .iter()
+            .filter_map(Option::as_ref)
+            .map(|item| item.item_level)
+            .max()
+            .unwrap_or(1);
+
+        for slot in &mut self.crafting {
+            *slot = None;
+        }
+
+        let item = roll_item_of_rarity(rng, database, item_level, to);
+        let crafted_item = item.clone();
+        let destination = match self.add_item(item) {
+            ItemDestination::Inventory => CraftingDestination::Inventory,
+            ItemDestination::Stash => CraftingDestination::Stash,
+            ItemDestination::Lost => {
+                if let Some(slot) = self.crafting.iter_mut().find(|slot| slot.is_none()) {
+                    *slot = Some(crafted_item.clone());
+                    CraftingDestination::Cube
+                } else {
+                    CraftingDestination::Lost
+                }
+            }
+        };
+
+        CraftingResult::Crafted {
+            item: crafted_item,
+            destination,
+        }
+    }
+
     pub(crate) fn item_at(&self, location: ItemLocation) -> Option<&ItemInstance> {
         match location {
             ItemLocation::Inventory(index) => self.inventory.get(index),
             ItemLocation::Stash(index) => self.stash.get(index),
+            ItemLocation::Crafting(index) => self.crafting.get(index),
             ItemLocation::Equipment(index) => self.equipment.get(index),
         }
         .and_then(Option::as_ref)
@@ -1339,7 +1433,7 @@ impl PlayerProfile {
                 let equipment_slot = database.items[item.def_id].slot.index();
                 self.move_item(location, ItemLocation::Equipment(equipment_slot), database)
             }
-            ItemLocation::Equipment(_) => {
+            ItemLocation::Crafting(_) | ItemLocation::Equipment(_) => {
                 if let Some(index) = self.inventory.iter().position(Option::is_none) {
                     self.move_item(location, ItemLocation::Inventory(index), database)
                 } else if let Some(index) = self.stash.iter().position(Option::is_none) {
@@ -1355,6 +1449,7 @@ impl PlayerProfile {
         match location {
             ItemLocation::Inventory(index) => index < self.inventory.len(),
             ItemLocation::Stash(index) => index < self.stash.len(),
+            ItemLocation::Crafting(index) => index < self.crafting.len(),
             ItemLocation::Equipment(index) => index < self.equipment.len(),
         }
     }
@@ -1366,7 +1461,9 @@ impl PlayerProfile {
         database: &GameDatabase,
     ) -> bool {
         match location {
-            ItemLocation::Inventory(_) | ItemLocation::Stash(_) => self.location_exists(location),
+            ItemLocation::Inventory(_) | ItemLocation::Stash(_) | ItemLocation::Crafting(_) => {
+                self.location_exists(location)
+            }
             ItemLocation::Equipment(index) => {
                 self.location_exists(location) && database.items[item.def_id].slot.index() == index
             }
@@ -1377,6 +1474,7 @@ impl PlayerProfile {
         match location {
             ItemLocation::Inventory(index) => self.inventory.get_mut(index),
             ItemLocation::Stash(index) => self.stash.get_mut(index),
+            ItemLocation::Crafting(index) => self.crafting.get_mut(index),
             ItemLocation::Equipment(index) => self.equipment.get_mut(index),
         }
         .and_then(Option::take)
@@ -1386,6 +1484,7 @@ impl PlayerProfile {
         let slot = match location {
             ItemLocation::Inventory(index) => self.inventory.get_mut(index),
             ItemLocation::Stash(index) => self.stash.get_mut(index),
+            ItemLocation::Crafting(index) => self.crafting.get_mut(index),
             ItemLocation::Equipment(index) => self.equipment.get_mut(index),
         };
 
@@ -1413,10 +1512,35 @@ pub(crate) enum ItemDestination {
     Lost,
 }
 
+pub(crate) enum CraftingPreview {
+    NeedsItems,
+    RarityMismatch,
+    MaxRarity,
+    Ready { from: Rarity, to: Rarity },
+}
+
+pub(crate) enum CraftingDestination {
+    Inventory,
+    Stash,
+    Cube,
+    Lost,
+}
+
+pub(crate) enum CraftingResult {
+    Crafted {
+        item: ItemInstance,
+        destination: CraftingDestination,
+    },
+    NeedsItems,
+    RarityMismatch,
+    MaxRarity,
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ItemLocation {
     Inventory(usize),
     Stash(usize),
+    Crafting(usize),
     Equipment(usize),
 }
 
@@ -1511,7 +1635,6 @@ pub(crate) fn roll_item(
     database: &GameDatabase,
     item_level: u32,
 ) -> ItemInstance {
-    let def_id = rng.range(database.items.len());
     let rarity = match rng.percent() {
         roll if roll >= 99.6 => Rarity::Legendary,
         roll if roll >= 98.0 => Rarity::Epic,
@@ -1520,6 +1643,16 @@ pub(crate) fn roll_item(
         roll if roll >= 45.0 => Rarity::Uncommon,
         _ => Rarity::Common,
     };
+    roll_item_of_rarity(rng, database, item_level, rarity)
+}
+
+pub(crate) fn roll_item_of_rarity(
+    rng: &mut LootRng,
+    database: &GameDatabase,
+    item_level: u32,
+    rarity: Rarity,
+) -> ItemInstance {
+    let def_id = rng.range(database.items.len());
     let definition = &database.items[def_id];
     let rolls = roll_item_stats(rng, definition, item_level, rarity);
     let power = item_power_score(definition, item_level, rarity, rolls);
