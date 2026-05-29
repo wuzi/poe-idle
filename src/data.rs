@@ -91,15 +91,15 @@ impl Default for GameDatabase {
                 MapDefinition {
                     name: "Moss Gate",
                     area_level: 1,
-                    finish_x: 3200.0,
+                    finish_x: 2550.0,
                     background: Color::srgb(0.16, 0.32, 0.29),
                     packs: vec![
-                        EnemyPack::new(150.0, EnemyKind::Risen, 2),
-                        EnemyPack::new(620.0, EnemyKind::Risen, 3),
-                        EnemyPack::new(1120.0, EnemyKind::CarrionImp, 2),
-                        EnemyPack::new(1680.0, EnemyKind::Risen, 3),
-                        EnemyPack::new(2250.0, EnemyKind::CarrionImp, 3),
-                        EnemyPack::new(2880.0, EnemyKind::MapRare, 1),
+                        EnemyPack::new(150.0, EnemyKind::Risen, 1),
+                        EnemyPack::new(460.0, EnemyKind::Risen, 2),
+                        EnemyPack::new(820.0, EnemyKind::CarrionImp, 2),
+                        EnemyPack::new(1210.0, EnemyKind::Risen, 2),
+                        EnemyPack::new(1650.0, EnemyKind::CarrionImp, 2),
+                        EnemyPack::new(2120.0, EnemyKind::MapRare, 1),
                     ],
                 },
                 MapDefinition {
@@ -342,14 +342,14 @@ impl EnemyKind {
         match self {
             EnemyKind::Risen => EnemyArchetype {
                 name: "Risen",
-                max_health: 92.0,
-                damage: 13.0,
+                max_health: 76.0,
+                damage: 9.0,
                 armor: 3.0,
-                attacks_per_second: 0.72,
+                attacks_per_second: 0.66,
                 move_speed: 46.0,
-                gold_reward: 8,
-                xp_reward: 8,
-                item_chance: 10.0,
+                gold_reward: 10,
+                xp_reward: 18,
+                item_chance: 26.0,
                 visual: VisualProfile {
                     asset_key: "enemies/risen.png",
                     color: Color::srgb(0.58, 0.62, 0.66),
@@ -358,14 +358,14 @@ impl EnemyKind {
             },
             EnemyKind::CarrionImp => EnemyArchetype {
                 name: "Carrion Imp",
-                max_health: 72.0,
-                damage: 11.0,
+                max_health: 64.0,
+                damage: 8.0,
                 armor: 1.0,
-                attacks_per_second: 1.05,
+                attacks_per_second: 0.92,
                 move_speed: 64.0,
-                gold_reward: 6,
-                xp_reward: 7,
-                item_chance: 9.0,
+                gold_reward: 9,
+                xp_reward: 16,
+                item_chance: 24.0,
                 visual: VisualProfile {
                     asset_key: "enemies/carrion_imp.png",
                     color: Color::srgb(0.78, 0.35, 0.34),
@@ -390,14 +390,14 @@ impl EnemyKind {
             },
             EnemyKind::MapRare => EnemyArchetype {
                 name: "Map Rare",
-                max_health: 360.0,
-                damage: 30.0,
+                max_health: 320.0,
+                damage: 26.0,
                 armor: 14.0,
                 attacks_per_second: 0.68,
                 move_speed: 42.0,
-                gold_reward: 38,
-                xp_reward: 38,
-                item_chance: 48.0,
+                gold_reward: 48,
+                xp_reward: 52,
+                item_chance: 70.0,
                 visual: VisualProfile {
                     asset_key: "enemies/map_rare.png",
                     color: Color::srgb(0.86, 0.62, 0.22),
@@ -721,9 +721,9 @@ impl PlayerProfile {
             }
         }
 
-        let max_health = (65.0
-            + attributes.vitality as f32 * 5.8
-            + attributes.strength as f32 * 1.4
+        let max_health = (82.0
+            + attributes.vitality as f32 * 6.3
+            + attributes.strength as f32 * 1.55
             + item_health)
             * health_multiplier;
         let damage = (class.base_damage
@@ -743,7 +743,7 @@ impl PlayerProfile {
         let move_speed = (PLAYER_SPEED + attributes.dexterity as f32 * 0.28 + item_move_speed)
             .clamp(40.0, 260.0);
         let health_regeneration =
-            (0.25 + attributes.vitality as f32 * 0.035 + item_health_regen).clamp(0.0, 40.0);
+            (1.2 + attributes.vitality as f32 * 0.06 + item_health_regen).clamp(0.0, 40.0);
 
         DerivedStats {
             max_health,
@@ -759,7 +759,7 @@ impl PlayerProfile {
     }
 
     pub(crate) fn xp_to_next_level(&self) -> u32 {
-        260 + self.level.pow(2) * 95
+        210 + self.level.pow(2) * 80
     }
 
     pub(crate) fn gain_xp(&mut self, xp: u32, database: &GameDatabase) -> bool {

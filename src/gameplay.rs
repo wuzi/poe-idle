@@ -352,6 +352,16 @@ pub(crate) fn resolve_combat_outcomes(
             "{} #{} defeated: +{} gold",
             enemy.name, enemy.id, enemy.gold_reward
         );
+        if let Ok(mut player_health) = player_query.single_mut() {
+            let recovery = (player_health.max * 0.045).max(6.0);
+            player_health.current = (player_health.current + recovery).min(player_health.max);
+            spawn_floating_text(
+                &mut commands,
+                format!("+{recovery:.0}hp"),
+                transform.translation + Vec3::new(0.0, 92.0, 20.0),
+                Color::srgb(0.36, 1.0, 0.48),
+            );
+        }
         spawn_floating_text(
             &mut commands,
             format!("+{}g", enemy.gold_reward),
