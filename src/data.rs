@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::constants::{EQUIPMENT_SLOT_COUNT, INVENTORY_SIZE, STASH_SIZE};
+use crate::constants::{EQUIPMENT_SLOT_COUNT, INVENTORY_SIZE, PLAYER_SPEED, STASH_SIZE};
 
 #[derive(Resource)]
 pub(crate) struct GameDatabase {
@@ -136,41 +136,121 @@ impl Default for GameDatabase {
                     name: "Iron Splitter",
                     slot: ItemSlot::Weapon,
                     base_power: 6,
-                    description: "A heavy starter blade built for steady map clearing.",
+                    description: "A heavy starter blade with damage and attack speed rolls.",
                     tint: Color::srgb(0.72, 0.74, 0.78),
                     asset_key: "items/iron_splitter.png",
+                    rolls: ItemRollProfile {
+                        damage: Some(RollRange::new(5.0, 9.0)),
+                        attack_speed: Some(RollRange::new(1.0, 3.0)),
+                        ..ItemRollProfile::empty()
+                    },
                 },
                 ItemDefinition {
                     name: "Buckler",
                     slot: ItemSlot::Shield,
                     base_power: 4,
-                    description: "A worn round shield that takes the edge off incoming hits.",
+                    description: "A worn round shield that rolls armor and life.",
                     tint: Color::srgb(0.45, 0.58, 0.73),
                     asset_key: "items/buckler.png",
+                    rolls: ItemRollProfile {
+                        armor: Some(RollRange::new(4.0, 8.0)),
+                        max_health: Some(RollRange::new(4.0, 10.0)),
+                        ..ItemRollProfile::empty()
+                    },
+                },
+                ItemDefinition {
+                    name: "Leather Cap",
+                    slot: ItemSlot::Head,
+                    base_power: 4,
+                    description: "Light head armour with life and regeneration rolls.",
+                    tint: Color::srgb(0.49, 0.36, 0.24),
+                    asset_key: "items/leather_cap.png",
+                    rolls: ItemRollProfile {
+                        armor: Some(RollRange::new(2.0, 5.0)),
+                        max_health: Some(RollRange::new(6.0, 14.0)),
+                        health_regen: Some(RollRange::new(0.4, 1.2)),
+                        ..ItemRollProfile::empty()
+                    },
                 },
                 ItemDefinition {
                     name: "Scale Vest",
-                    slot: ItemSlot::Armor,
-                    base_power: 5,
-                    description: "Overlapping metal scales that add protection and endurance.",
+                    slot: ItemSlot::Chest,
+                    base_power: 7,
+                    description: "Overlapping metal scales with strong life and regen rolls.",
                     tint: Color::srgb(0.66, 0.48, 0.24),
                     asset_key: "items/scale_vest.png",
+                    rolls: ItemRollProfile {
+                        armor: Some(RollRange::new(7.0, 14.0)),
+                        max_health: Some(RollRange::new(18.0, 35.0)),
+                        health_regen: Some(RollRange::new(0.8, 2.0)),
+                        ..ItemRollProfile::empty()
+                    },
+                },
+                ItemDefinition {
+                    name: "Iron Grips",
+                    slot: ItemSlot::Gloves,
+                    base_power: 5,
+                    description: "Combat gloves that can roll attack speed and damage.",
+                    tint: Color::srgb(0.58, 0.58, 0.61),
+                    asset_key: "items/iron_grips.png",
+                    rolls: ItemRollProfile {
+                        damage: Some(RollRange::new(2.0, 5.0)),
+                        attack_speed: Some(RollRange::new(1.0, 3.0)),
+                        ..ItemRollProfile::empty()
+                    },
+                },
+                ItemDefinition {
+                    name: "Plate Greaves",
+                    slot: ItemSlot::Legs,
+                    base_power: 6,
+                    description: "Leg armour with defensive and regeneration rolls.",
+                    tint: Color::srgb(0.54, 0.50, 0.45),
+                    asset_key: "items/plate_greaves.png",
+                    rolls: ItemRollProfile {
+                        armor: Some(RollRange::new(5.0, 11.0)),
+                        max_health: Some(RollRange::new(12.0, 26.0)),
+                        health_regen: Some(RollRange::new(0.6, 1.6)),
+                        ..ItemRollProfile::empty()
+                    },
+                },
+                ItemDefinition {
+                    name: "Trail Boots",
+                    slot: ItemSlot::Boots,
+                    base_power: 5,
+                    description: "Boots that roll movement speed for faster map travel.",
+                    tint: Color::srgb(0.36, 0.45, 0.30),
+                    asset_key: "items/trail_boots.png",
+                    rolls: ItemRollProfile {
+                        armor: Some(RollRange::new(2.0, 5.0)),
+                        move_speed: Some(RollRange::new(4.0, 8.0)),
+                        ..ItemRollProfile::empty()
+                    },
                 },
                 ItemDefinition {
                     name: "Verdant Band",
                     slot: ItemSlot::Trinket,
                     base_power: 3,
-                    description: "A small ring carrying a pulse of green battlefield luck.",
+                    description: "A small ring carrying a pulse of damage and survival.",
                     tint: Color::srgb(0.34, 0.73, 0.36),
                     asset_key: "items/verdant_band.png",
+                    rolls: ItemRollProfile {
+                        damage: Some(RollRange::new(1.0, 3.0)),
+                        max_health: Some(RollRange::new(5.0, 12.0)),
+                        ..ItemRollProfile::empty()
+                    },
                 },
                 ItemDefinition {
                     name: "Runed Focus",
                     slot: ItemSlot::Trinket,
                     base_power: 7,
-                    description: "A carved focus that sharpens damage and keeps the wearer alive.",
+                    description: "A carved focus with higher damage and life rolls.",
                     tint: Color::srgb(0.48, 0.56, 0.88),
                     asset_key: "items/runed_focus.png",
+                    rolls: ItemRollProfile {
+                        damage: Some(RollRange::new(3.0, 7.0)),
+                        max_health: Some(RollRange::new(8.0, 18.0)),
+                        ..ItemRollProfile::empty()
+                    },
                 },
             ],
             talents: vec![
@@ -353,13 +433,53 @@ pub(crate) struct ItemDefinition {
     pub(crate) description: &'static str,
     pub(crate) tint: Color,
     pub(crate) asset_key: &'static str,
+    pub(crate) rolls: ItemRollProfile,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct ItemRollProfile {
+    pub(crate) damage: Option<RollRange>,
+    pub(crate) armor: Option<RollRange>,
+    pub(crate) max_health: Option<RollRange>,
+    pub(crate) move_speed: Option<RollRange>,
+    pub(crate) attack_speed: Option<RollRange>,
+    pub(crate) health_regen: Option<RollRange>,
+}
+
+impl ItemRollProfile {
+    const fn empty() -> Self {
+        Self {
+            damage: None,
+            armor: None,
+            max_health: None,
+            move_speed: None,
+            attack_speed: None,
+            health_regen: None,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct RollRange {
+    min: f32,
+    max: f32,
+}
+
+impl RollRange {
+    const fn new(min: f32, max: f32) -> Self {
+        Self { min, max }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ItemSlot {
     Weapon,
     Shield,
-    Armor,
+    Head,
+    Chest,
+    Gloves,
+    Legs,
+    Boots,
     Trinket,
 }
 
@@ -368,8 +488,12 @@ impl ItemSlot {
         match self {
             ItemSlot::Weapon => 0,
             ItemSlot::Shield => 1,
-            ItemSlot::Armor => 2,
-            ItemSlot::Trinket => 3,
+            ItemSlot::Head => 2,
+            ItemSlot::Chest => 3,
+            ItemSlot::Gloves => 4,
+            ItemSlot::Legs => 5,
+            ItemSlot::Boots => 6,
+            ItemSlot::Trinket => 7,
         }
     }
 
@@ -377,9 +501,26 @@ impl ItemSlot {
         match self {
             ItemSlot::Weapon => "Weapon",
             ItemSlot::Shield => "Shield",
-            ItemSlot::Armor => "Armor",
+            ItemSlot::Head => "Head",
+            ItemSlot::Chest => "Chest",
+            ItemSlot::Gloves => "Gloves",
+            ItemSlot::Legs => "Legs",
+            ItemSlot::Boots => "Boots",
             ItemSlot::Trinket => "Trinket",
         }
+    }
+
+    pub(crate) const fn all() -> [Self; EQUIPMENT_SLOT_COUNT] {
+        [
+            Self::Weapon,
+            Self::Shield,
+            Self::Head,
+            Self::Chest,
+            Self::Gloves,
+            Self::Legs,
+            Self::Boots,
+            Self::Trinket,
+        ]
     }
 }
 
@@ -389,6 +530,17 @@ pub(crate) struct ItemInstance {
     pub(crate) rarity: Rarity,
     pub(crate) item_level: u32,
     pub(crate) power: u32,
+    pub(crate) rolls: ItemStatRolls,
+}
+
+#[derive(Clone, Copy, Default)]
+pub(crate) struct ItemStatRolls {
+    pub(crate) damage: f32,
+    pub(crate) armor: f32,
+    pub(crate) max_health: f32,
+    pub(crate) move_speed: f32,
+    pub(crate) attack_speed: f32,
+    pub(crate) health_regen: f32,
 }
 
 #[derive(Clone, Copy)]
@@ -412,6 +564,14 @@ impl Rarity {
             Rarity::Normal => 1,
             Rarity::Magic => 2,
             Rarity::Rare => 3,
+        }
+    }
+
+    fn roll_multiplier(self) -> f32 {
+        match self {
+            Rarity::Normal => 1.0,
+            Rarity::Magic => 1.35,
+            Rarity::Rare => 1.85,
         }
     }
 }
@@ -502,22 +662,17 @@ impl PlayerProfile {
         let mut item_damage = 0.0;
         let mut item_armor = 0.0;
         let mut item_health = 0.0;
+        let mut item_move_speed = 0.0;
+        let mut item_attack_speed = 0.0;
+        let mut item_health_regen = 0.0;
 
         for item in self.equipment.iter().flatten() {
-            let definition = &database.items[item.def_id];
-            let power = item.power as f32;
-            match definition.slot {
-                ItemSlot::Weapon => item_damage += power * 0.9,
-                ItemSlot::Shield => item_armor += power * 0.65,
-                ItemSlot::Armor => {
-                    item_armor += power * 1.1;
-                    item_health += power * 1.8;
-                }
-                ItemSlot::Trinket => {
-                    item_damage += power * 0.3;
-                    item_health += power * 0.9;
-                }
-            }
+            item_damage += item.rolls.damage;
+            item_armor += item.rolls.armor;
+            item_health += item.rolls.max_health;
+            item_move_speed += item.rolls.move_speed;
+            item_attack_speed += item.rolls.attack_speed;
+            item_health_regen += item.rolls.health_regen;
         }
 
         let mut damage_multiplier = 1.0;
@@ -552,14 +707,21 @@ impl PlayerProfile {
             + item_damage)
             * damage_multiplier;
         let armor = class.base_armor + attributes.strength as f32 * 0.30 + item_armor;
-        let attacks_per_second =
-            (class.attacks_per_second + attributes.dexterity as f32 * 0.006).clamp(0.45, 1.8);
+        let attacks_per_second = ((class.attacks_per_second + attributes.dexterity as f32 * 0.004)
+            * (1.0 + item_attack_speed / 100.0))
+            .clamp(0.45, 5.0);
+        let move_speed = (PLAYER_SPEED + attributes.dexterity as f32 * 0.28 + item_move_speed)
+            .clamp(40.0, 260.0);
+        let health_regeneration =
+            (0.25 + attributes.vitality as f32 * 0.035 + item_health_regen).clamp(0.0, 40.0);
 
         DerivedStats {
             max_health,
             damage,
             armor,
             attacks_per_second,
+            move_speed,
+            health_regeneration,
             loot_bonus,
         }
     }
@@ -727,6 +889,8 @@ pub(crate) struct DerivedStats {
     pub(crate) damage: f32,
     pub(crate) armor: f32,
     pub(crate) attacks_per_second: f32,
+    pub(crate) move_speed: f32,
+    pub(crate) health_regeneration: f32,
     pub(crate) loot_bonus: f32,
 }
 
@@ -810,6 +974,10 @@ impl LootRng {
     pub(crate) fn percent(&mut self) -> f32 {
         (self.next_u32() % 10_000) as f32 / 100.0
     }
+
+    fn unit(&mut self) -> f32 {
+        self.percent() / 100.0
+    }
 }
 
 pub(crate) fn seed_starting_equipment(profile: &mut PlayerProfile, database: &GameDatabase) {
@@ -817,18 +985,8 @@ pub(crate) fn seed_starting_equipment(profile: &mut PlayerProfile, database: &Ga
         return;
     }
 
-    let weapon = ItemInstance {
-        def_id: 0,
-        rarity: Rarity::Normal,
-        item_level: 1,
-        power: database.items[0].base_power,
-    };
-    let shield = ItemInstance {
-        def_id: 1,
-        rarity: Rarity::Normal,
-        item_level: 1,
-        power: database.items[1].base_power,
-    };
+    let weapon = starter_item(0, database);
+    let shield = starter_item(1, database);
     let weapon_slot = database.items[weapon.def_id].slot.index();
     let shield_slot = database.items[shield.def_id].slot.index();
     profile.equipment[weapon_slot] = Some(weapon);
@@ -847,14 +1005,105 @@ pub(crate) fn roll_item(
         _ => Rarity::Normal,
     };
     let definition = &database.items[def_id];
-    let power =
-        definition.base_power + item_level + rarity.multiplier() * (1 + rng.range(3) as u32);
+    let rolls = roll_item_stats(rng, definition, item_level, rarity);
+    let power = item_power_score(definition, item_level, rarity, rolls);
     ItemInstance {
         def_id,
         rarity,
         item_level,
         power,
+        rolls,
     }
+}
+
+fn starter_item(def_id: usize, database: &GameDatabase) -> ItemInstance {
+    let rarity = Rarity::Normal;
+    let item_level = 1;
+    let definition = &database.items[def_id];
+    let rolls = minimum_item_stats(definition, item_level, rarity);
+    let power = item_power_score(definition, item_level, rarity, rolls);
+    ItemInstance {
+        def_id,
+        rarity,
+        item_level,
+        power,
+        rolls,
+    }
+}
+
+fn roll_item_stats(
+    rng: &mut LootRng,
+    definition: &ItemDefinition,
+    item_level: u32,
+    rarity: Rarity,
+) -> ItemStatRolls {
+    ItemStatRolls {
+        damage: roll_stat(rng, definition.rolls.damage, item_level, rarity),
+        armor: roll_stat(rng, definition.rolls.armor, item_level, rarity),
+        max_health: roll_stat(rng, definition.rolls.max_health, item_level, rarity),
+        move_speed: roll_stat(rng, definition.rolls.move_speed, item_level, rarity),
+        attack_speed: roll_stat(rng, definition.rolls.attack_speed, item_level, rarity),
+        health_regen: roll_stat(rng, definition.rolls.health_regen, item_level, rarity),
+    }
+}
+
+fn minimum_item_stats(
+    definition: &ItemDefinition,
+    item_level: u32,
+    rarity: Rarity,
+) -> ItemStatRolls {
+    ItemStatRolls {
+        damage: minimum_stat(definition.rolls.damage, item_level, rarity),
+        armor: minimum_stat(definition.rolls.armor, item_level, rarity),
+        max_health: minimum_stat(definition.rolls.max_health, item_level, rarity),
+        move_speed: minimum_stat(definition.rolls.move_speed, item_level, rarity),
+        attack_speed: minimum_stat(definition.rolls.attack_speed, item_level, rarity),
+        health_regen: minimum_stat(definition.rolls.health_regen, item_level, rarity),
+    }
+}
+
+fn roll_stat(rng: &mut LootRng, range: Option<RollRange>, item_level: u32, rarity: Rarity) -> f32 {
+    let Some(range) = range else {
+        return 0.0;
+    };
+    let (min, max) = scaled_range(range, item_level, rarity);
+    rounded_roll(min + (max - min) * rng.unit())
+}
+
+fn minimum_stat(range: Option<RollRange>, item_level: u32, rarity: Rarity) -> f32 {
+    let Some(range) = range else {
+        return 0.0;
+    };
+    let (min, _) = scaled_range(range, item_level, rarity);
+    rounded_roll(min)
+}
+
+fn scaled_range(range: RollRange, item_level: u32, rarity: Rarity) -> (f32, f32) {
+    let level_scale = 1.0 + item_level.saturating_sub(1) as f32 * 0.12;
+    let rarity_scale = rarity.roll_multiplier();
+    (
+        range.min * level_scale * rarity_scale,
+        range.max * level_scale * rarity_scale,
+    )
+}
+
+fn rounded_roll(value: f32) -> f32 {
+    (value * 10.0).round() / 10.0
+}
+
+fn item_power_score(
+    definition: &ItemDefinition,
+    item_level: u32,
+    rarity: Rarity,
+    rolls: ItemStatRolls,
+) -> u32 {
+    let weighted_stats = rolls.damage
+        + rolls.armor * 0.65
+        + rolls.max_health * 0.18
+        + rolls.move_speed * 0.85
+        + rolls.attack_speed * 1.4
+        + rolls.health_regen * 4.0;
+    definition.base_power + item_level + rarity.multiplier() * 2 + weighted_stats.round() as u32
 }
 
 pub(crate) fn describe_item(item: &ItemInstance, database: &GameDatabase) -> String {
@@ -867,39 +1116,40 @@ pub(crate) fn describe_item(item: &ItemInstance, database: &GameDatabase) -> Str
     )
 }
 
-pub(crate) fn item_damage_bonus(item: &ItemInstance, definition: &ItemDefinition) -> f32 {
-    let power = item.power as f32;
-    match definition.slot {
-        ItemSlot::Weapon => power * 0.9,
-        ItemSlot::Trinket => power * 0.3,
-        ItemSlot::Shield | ItemSlot::Armor => 0.0,
-    }
+pub(crate) fn item_damage_bonus(item: &ItemInstance, _definition: &ItemDefinition) -> f32 {
+    item.rolls.damage
 }
 
-pub(crate) fn item_armor_bonus(item: &ItemInstance, definition: &ItemDefinition) -> f32 {
-    let power = item.power as f32;
-    match definition.slot {
-        ItemSlot::Shield => power * 0.65,
-        ItemSlot::Armor => power * 1.1,
-        ItemSlot::Weapon | ItemSlot::Trinket => 0.0,
-    }
+pub(crate) fn item_armor_bonus(item: &ItemInstance, _definition: &ItemDefinition) -> f32 {
+    item.rolls.armor
 }
 
-pub(crate) fn item_life_bonus(item: &ItemInstance, definition: &ItemDefinition) -> f32 {
-    let power = item.power as f32;
-    match definition.slot {
-        ItemSlot::Armor => power * 1.8,
-        ItemSlot::Trinket => power * 0.9,
-        ItemSlot::Weapon | ItemSlot::Shield => 0.0,
-    }
+pub(crate) fn item_life_bonus(item: &ItemInstance, _definition: &ItemDefinition) -> f32 {
+    item.rolls.max_health
+}
+
+pub(crate) fn item_move_speed_bonus(item: &ItemInstance) -> f32 {
+    item.rolls.move_speed
+}
+
+pub(crate) fn item_attack_speed_bonus(item: &ItemInstance) -> f32 {
+    item.rolls.attack_speed
+}
+
+pub(crate) fn item_health_regen_bonus(item: &ItemInstance) -> f32 {
+    item.rolls.health_regen
 }
 
 pub(crate) fn item_slot_effect(slot: ItemSlot) -> &'static str {
     match slot {
-        ItemSlot::Weapon => "Effect: increases auto-attack hit damage.",
+        ItemSlot::Weapon => "Effect: rolls damage and attack speed.",
         ItemSlot::Shield => "Effect: reduces incoming hit damage through armor.",
-        ItemSlot::Armor => "Effect: grants armor and maximum life.",
-        ItemSlot::Trinket => "Effect: adds a mix of damage and survival stats.",
+        ItemSlot::Head => "Effect: rolls armor, maximum life, and health regeneration.",
+        ItemSlot::Chest => "Effect: rolls strong armor, life, and health regeneration.",
+        ItemSlot::Gloves => "Effect: rolls attack speed and damage.",
+        ItemSlot::Legs => "Effect: rolls armor, life, and health regeneration.",
+        ItemSlot::Boots => "Effect: rolls movement speed for faster map travel.",
+        ItemSlot::Trinket => "Effect: adds flexible damage and survival stats.",
     }
 }
 

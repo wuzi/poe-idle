@@ -5,7 +5,7 @@ use crate::constants::{WINDOW_HEIGHT, WINDOW_WIDTH};
 use crate::data::{GameDatabase, LootRng, PlayerProfile, RunState};
 use crate::gameplay::{
     enemies_attack, handle_map_transitions, move_enemies, move_player, player_attack,
-    resolve_combat_outcomes, spawn_enemy_packs,
+    regenerate_player_health, resolve_combat_outcomes, spawn_enemy_packs,
 };
 use crate::ui::{
     handle_bottom_buttons, handle_inventory_input, sync_character_panel, sync_dragged_item_visual,
@@ -44,6 +44,7 @@ pub(crate) fn run() {
                     move_enemies,
                     player_attack,
                     enemies_attack,
+                    regenerate_player_health,
                     resolve_combat_outcomes,
                     tick_timed_entities,
                     sync_health_bars,

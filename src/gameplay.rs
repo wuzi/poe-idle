@@ -2,8 +2,7 @@ use bevy::prelude::*;
 
 use crate::components::{AttackClock, CharacterVisual, Enemy, Health, MapEntity, Player};
 use crate::constants::{
-    ENEMY_ATTACK_RANGE, PLAYER_ATTACK_RANGE, PLAYER_SPEED, PLAYER_START_X, PLAYER_Y,
-    SPAWN_AHEAD_DISTANCE,
+    ENEMY_ATTACK_RANGE, PLAYER_ATTACK_RANGE, PLAYER_START_X, PLAYER_Y, SPAWN_AHEAD_DISTANCE,
 };
 use crate::data::{
     GameDatabase, ItemDestination, LootRng, PlayerProfile, RunState, RunStatus, damage_after_armor,
@@ -139,6 +138,8 @@ pub(crate) fn spawn_enemy_packs(
 
 pub(crate) fn move_player(
     time: Res<Time>,
+    database: Res<GameDatabase>,
+    profile: Res<PlayerProfile>,
     run: Res<RunState>,
     mut player_query: Query<&mut Transform, With<Player>>,
     enemy_query: Query<(&Transform, &Health), (With<Enemy>, Without<Player>)>,
@@ -158,8 +159,32 @@ pub(crate) fn move_player(
     });
 
     if !enemy_blocks_path {
-        player_transform.translation.x += PLAYER_SPEED * time.delta_secs();
+        let stats = profile.derived_stats(&database);
+        player_transform.translation.x += stats.move_speed * time.delta_secs();
     }
+}
+
+pub(crate) fn regenerate_player_health(
+    time: Res<Time>,
+    database: Res<GameDatabase>,
+    profile: Res<PlayerProfile>,
+    run: Res<RunState>,
+    mut player_query: Query<&mut Health, With<Player>>,
+) {
+    let Ok(mut health) = player_query.single_mut() else {
+        return;
+    };
+
+    let stats = profile.derived_stats(&database);
+    health.max = stats.max_health;
+    health.current = health.current.min(health.max);
+
+    if run.status != RunStatus::Running || health.current <= 0.0 {
+        return;
+    }
+
+    health.current =
+        (health.current + stats.health_regeneration * time.delta_secs()).min(health.max);
 }
 
 pub(crate) fn move_enemies(

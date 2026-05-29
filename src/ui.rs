@@ -13,7 +13,8 @@ use crate::constants::{
 };
 use crate::data::{
     GameDatabase, ItemInstance, ItemLocation, ItemSlot, PlayerProfile, Rarity, RunState,
-    TalentGrant, item_armor_bonus, item_damage_bonus, item_life_bonus, item_slot_effect,
+    TalentGrant, item_armor_bonus, item_attack_speed_bonus, item_damage_bonus,
+    item_health_regen_bonus, item_life_bonus, item_move_speed_bonus, item_slot_effect,
     rarity_color, rarity_effect,
 };
 
@@ -73,7 +74,7 @@ pub(crate) fn spawn_screen_layout(commands: &mut Commands) {
 
     spawn_inventory_panel_label(commands, "Inventory", Vec3::new(-290.0, -236.0, 35.0), 17.0);
     spawn_inventory_panel_label(commands, "Stash", Vec3::new(60.0, -236.0, 35.0), 17.0);
-    spawn_inventory_panel_label(commands, "Equipped", Vec3::new(60.0, -382.0, 35.0), 15.0);
+    spawn_inventory_panel_label(commands, "Equipped", Vec3::new(60.0, -384.0, 35.0), 15.0);
 
     spawn_inventory_cells(
         commands,
@@ -89,10 +90,10 @@ pub(crate) fn spawn_screen_layout(commands: &mut Commands) {
         commands,
         InventorySource::Equipment,
         60.0,
-        -422.0,
+        -414.0,
         4,
-        1,
-        42.0,
+        2,
+        38.0,
     );
     spawn_bottom_button(
         commands,
@@ -589,8 +590,13 @@ pub(crate) fn sync_character_panel(
                 profile.respawns,
             ),
             CharacterPanelText::Combat => format!(
-                "Combat\nDamage {:.0}\nArmor {:.0}\nAttacks/sec {:.2}\nLoot bonus +{:.0}%",
-                stats.damage, stats.armor, stats.attacks_per_second, stats.loot_bonus,
+                "Combat\nDamage {:.0}\nArmor {:.0}\nAttacks/sec {:.2}\nMove speed {:.0}\nRegen {:.1}/s\nLoot bonus +{:.0}%",
+                stats.damage,
+                stats.armor,
+                stats.attacks_per_second,
+                stats.move_speed,
+                stats.health_regeneration,
+                stats.loot_bonus,
             ),
             CharacterPanelText::Attributes => format!(
                 "Attributes\nStrength {}\nDexterity {}\nIntelligence {}\nVitality {}",
@@ -819,11 +825,13 @@ pub(crate) fn sync_hud_text(
                 class.name, profile.level, profile.gold, run.atlas_tier
             ),
             HudText::Stats => format!(
-                "{}  |  DMG {:.0}  ARM {:.0}  APS {:.2}\nSTR {}  DEX {}  INT {}  VIT {}",
+                "{}  |  DMG {:.0}  ARM {:.0}  APS {:.2}  MS {:.0}\nRegen {:.1}/s  |  STR {}  DEX {}  INT {}  VIT {}",
                 health_text,
                 stats.damage,
                 stats.armor,
                 stats.attacks_per_second,
+                stats.move_speed,
+                stats.health_regeneration,
                 attributes.strength,
                 attributes.dexterity,
                 attributes.intelligence,
@@ -842,6 +850,9 @@ fn item_tooltip_text(item: &ItemInstance, database: &GameDatabase) -> String {
     let damage = item_damage_bonus(item, definition);
     let armor = item_armor_bonus(item, definition);
     let life = item_life_bonus(item, definition);
+    let move_speed = item_move_speed_bonus(item);
+    let attack_speed = item_attack_speed_bonus(item);
+    let health_regen = item_health_regen_bonus(item);
     let mut lines = vec![
         definition.name.to_string(),
         format!("{} {}", item.rarity.name(), definition.slot.name()),
@@ -860,6 +871,15 @@ fn item_tooltip_text(item: &ItemInstance, database: &GameDatabase) -> String {
     if life > 0.0 {
         lines.push(format!("Life +{life:.0}"));
     }
+    if move_speed > 0.0 {
+        lines.push(format!("Move speed +{move_speed:.1}"));
+    }
+    if attack_speed > 0.0 {
+        lines.push(format!("Attack speed +{attack_speed:.1}%"));
+    }
+    if health_regen > 0.0 {
+        lines.push(format!("Health regen +{health_regen:.1}/s"));
+    }
     lines.push(item_slot_effect(definition.slot).to_string());
     if let Some(extra_effect) = rarity_effect(item.rarity) {
         lines.push(extra_effect.to_string());
@@ -870,12 +890,7 @@ fn item_tooltip_text(item: &ItemInstance, database: &GameDatabase) -> String {
 
 fn equipment_summary(profile: &PlayerProfile, database: &GameDatabase) -> String {
     let mut lines = vec!["Equipment".to_string()];
-    for slot in [
-        ItemSlot::Weapon,
-        ItemSlot::Shield,
-        ItemSlot::Armor,
-        ItemSlot::Trinket,
-    ] {
+    for slot in ItemSlot::all() {
         let text = profile.equipment[slot.index()]
             .as_ref()
             .map(|item| {
