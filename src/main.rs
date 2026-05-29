@@ -24,6 +24,7 @@ const EQUIPMENT_SLOT_COUNT: usize = 4;
 const INVENTORY_CELL_SIZE: f32 = 34.0;
 const TOOLTIP_WIDTH: f32 = 278.0;
 const TOOLTIP_PADDING: f32 = 12.0;
+const BOTTOM_BUTTON_SIZE: Vec2 = Vec2::new(118.0, 30.0);
 
 fn main() {
     App::new()
@@ -32,6 +33,7 @@ fn main() {
         .insert_resource(PlayerProfile::default())
         .insert_resource(RunState::default())
         .insert_resource(LootRng::default())
+        .insert_resource(UiState::default())
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 title: "PoE Idle Prototype".into(),
@@ -56,7 +58,9 @@ fn main() {
                 sync_health_bars,
                 sync_character_visuals,
                 camera_follow,
+                handle_bottom_buttons,
                 update_item_tooltip,
+                sync_character_panel,
                 sync_screen_fixed_entities,
                 sync_progress_bar,
                 sync_inventory_grid,
@@ -721,6 +725,25 @@ enum ItemDestination {
 }
 
 #[derive(Resource)]
+struct UiState {
+    active_panel: ActivePanel,
+}
+
+impl Default for UiState {
+    fn default() -> Self {
+        Self {
+            active_panel: ActivePanel::Inventory,
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ActivePanel {
+    Inventory,
+    Character,
+}
+
+#[derive(Resource)]
 struct RunState {
     status: RunStatus,
     map_index: usize,
@@ -836,9 +859,32 @@ struct ScreenFixed {
 enum HudText {
     Header,
     Stats,
+    Message,
+}
+
+#[derive(Component)]
+struct BottomButton {
+    panel: ActivePanel,
+    size: Vec2,
+}
+
+#[derive(Component)]
+struct BottomButtonLabel {
+    panel: ActivePanel,
+}
+
+#[derive(Component)]
+struct CharacterPanelPiece;
+
+#[derive(Component)]
+enum CharacterPanelText {
+    Header,
+    Status,
+    Combat,
+    Attributes,
     Equipment,
     Talents,
-    Message,
+    Upgrades,
 }
 
 #[derive(Component)]
@@ -1023,18 +1069,6 @@ fn spawn_screen_layout(commands: &mut Commands) {
     );
     spawn_fixed_text(
         commands,
-        HudText::Equipment,
-        Vec3::new(82.0, 448.0, 35.0),
-        14.0,
-    );
-    spawn_fixed_text(
-        commands,
-        HudText::Talents,
-        Vec3::new(82.0, 407.0, 35.0),
-        14.0,
-    );
-    spawn_fixed_text(
-        commands,
         HudText::Message,
         Vec3::new(-315.0, 360.0, 35.0),
         16.0,
@@ -1063,6 +1097,19 @@ fn spawn_screen_layout(commands: &mut Commands) {
         1,
         42.0,
     );
+    spawn_bottom_button(
+        commands,
+        ActivePanel::Inventory,
+        "Inventory",
+        Vec3::new(-292.0, -447.0, 35.0),
+    );
+    spawn_bottom_button(
+        commands,
+        ActivePanel::Character,
+        "Character",
+        Vec3::new(-164.0, -447.0, 35.0),
+    );
+    spawn_character_panel(commands);
     spawn_item_tooltip(commands);
 }
 
@@ -1132,6 +1179,151 @@ fn spawn_fixed_label(commands: &mut Commands, label: &'static str, offset: Vec3,
         Anchor::TOP_LEFT,
         Transform::from_translation(offset),
         ScreenFixed { offset },
+    ));
+}
+
+fn spawn_bottom_button(
+    commands: &mut Commands,
+    panel: ActivePanel,
+    label: &'static str,
+    offset: Vec3,
+) {
+    commands.spawn((
+        Sprite::from_color(Color::srgba(0.19, 0.11, 0.07, 0.98), BOTTOM_BUTTON_SIZE),
+        Transform::from_translation(offset),
+        ScreenFixed { offset },
+        BottomButton {
+            panel,
+            size: BOTTOM_BUTTON_SIZE,
+        },
+    ));
+
+    let text_offset = offset + Vec3::new(-48.0, 9.0, 1.0);
+    commands.spawn((
+        Text2d::new(label),
+        TextFont {
+            font_size: 14.0,
+            ..default()
+        },
+        TextColor(Color::srgb(0.96, 0.70, 0.32)),
+        TextLayout::new_with_justify(Justify::Left),
+        Anchor::TOP_LEFT,
+        Transform::from_translation(text_offset),
+        ScreenFixed {
+            offset: text_offset,
+        },
+        BottomButtonLabel { panel },
+    ));
+}
+
+fn spawn_character_panel(commands: &mut Commands) {
+    spawn_character_panel_rect(
+        commands,
+        Vec3::new(0.0, 96.0, 42.0),
+        Vec2::new(650.0, 420.0),
+        Color::srgba(0.06, 0.06, 0.065, 0.97),
+    );
+    spawn_character_panel_rect(
+        commands,
+        Vec3::new(0.0, 279.0, 43.0),
+        Vec2::new(620.0, 42.0),
+        Color::srgba(0.25, 0.13, 0.08, 0.95),
+    );
+    spawn_character_panel_rect(
+        commands,
+        Vec3::new(-164.0, 101.0, 43.0),
+        Vec2::new(288.0, 306.0),
+        Color::srgba(0.10, 0.10, 0.11, 0.95),
+    );
+    spawn_character_panel_rect(
+        commands,
+        Vec3::new(164.0, 101.0, 43.0),
+        Vec2::new(288.0, 306.0),
+        Color::srgba(0.10, 0.10, 0.11, 0.95),
+    );
+
+    spawn_character_panel_text(
+        commands,
+        CharacterPanelText::Header,
+        Vec3::new(-298.0, 295.0, 44.0),
+        18.0,
+        Color::srgb(0.96, 0.70, 0.32),
+    );
+    spawn_character_panel_text(
+        commands,
+        CharacterPanelText::Status,
+        Vec3::new(-292.0, 244.0, 44.0),
+        13.0,
+        Color::srgb(0.92, 0.89, 0.80),
+    );
+    spawn_character_panel_text(
+        commands,
+        CharacterPanelText::Combat,
+        Vec3::new(-292.0, 118.0, 44.0),
+        13.0,
+        Color::srgb(0.92, 0.89, 0.80),
+    );
+    spawn_character_panel_text(
+        commands,
+        CharacterPanelText::Attributes,
+        Vec3::new(-292.0, 28.0, 44.0),
+        13.0,
+        Color::srgb(0.92, 0.89, 0.80),
+    );
+    spawn_character_panel_text(
+        commands,
+        CharacterPanelText::Equipment,
+        Vec3::new(36.0, -22.0, 44.0),
+        13.0,
+        Color::srgb(0.92, 0.89, 0.80),
+    );
+    spawn_character_panel_text(
+        commands,
+        CharacterPanelText::Talents,
+        Vec3::new(36.0, 244.0, 44.0),
+        14.0,
+        Color::srgb(0.92, 0.89, 0.80),
+    );
+    spawn_character_panel_text(
+        commands,
+        CharacterPanelText::Upgrades,
+        Vec3::new(36.0, 86.0, 44.0),
+        13.0,
+        Color::srgb(0.92, 0.89, 0.80),
+    );
+}
+
+fn spawn_character_panel_rect(commands: &mut Commands, offset: Vec3, size: Vec2, color: Color) {
+    commands.spawn((
+        Sprite::from_color(color, size),
+        Transform::from_translation(offset),
+        Visibility::Hidden,
+        ScreenFixed { offset },
+        CharacterPanelPiece,
+    ));
+}
+
+fn spawn_character_panel_text(
+    commands: &mut Commands,
+    kind: CharacterPanelText,
+    offset: Vec3,
+    font_size: f32,
+    color: Color,
+) {
+    commands.spawn((
+        Text2d::new(""),
+        TextFont {
+            font_size,
+            ..default()
+        },
+        TextColor(color),
+        TextLayout::new_with_justify(Justify::Left),
+        Anchor::TOP_LEFT,
+        Transform::from_translation(offset),
+        Visibility::Hidden,
+        ScreenFixed { offset },
+        CharacterPanelPiece,
+        kind,
     ));
 }
 
@@ -1711,6 +1903,119 @@ fn camera_follow(
     camera_transform.translation.x = player_transform.translation.x + 125.0;
 }
 
+fn handle_bottom_buttons(
+    mut ui_state: ResMut<UiState>,
+    mouse: Res<ButtonInput<MouseButton>>,
+    window_query: Query<&Window>,
+    mut button_query: Query<(&BottomButton, &ScreenFixed, &mut Sprite)>,
+    mut label_query: Query<(&BottomButtonLabel, &mut TextColor)>,
+) {
+    let cursor_offset = window_query.single().ok().and_then(|window| {
+        window.cursor_position().map(|position| {
+            Vec2::new(
+                position.x - WINDOW_WIDTH as f32 * 0.5,
+                WINDOW_HEIGHT as f32 * 0.5 - position.y,
+            )
+        })
+    });
+    let mut next_panel = ui_state.active_panel;
+
+    for (button, fixed, mut sprite) in &mut button_query {
+        let hovered = cursor_offset.is_some_and(|cursor| {
+            let half_size = button.size * 0.5;
+            (cursor.x - fixed.offset.x).abs() <= half_size.x
+                && (cursor.y - fixed.offset.y).abs() <= half_size.y
+        });
+
+        if hovered && mouse.just_pressed(MouseButton::Left) {
+            next_panel = button.panel;
+        }
+
+        let active = next_panel == button.panel;
+        sprite.color = if active {
+            Color::srgba(0.55, 0.28, 0.10, 0.98)
+        } else if hovered {
+            Color::srgba(0.34, 0.18, 0.09, 0.98)
+        } else {
+            Color::srgba(0.19, 0.11, 0.07, 0.98)
+        };
+    }
+
+    ui_state.active_panel = next_panel;
+
+    for (label, mut text_color) in &mut label_query {
+        text_color.0 = if ui_state.active_panel == label.panel {
+            Color::srgb(1.0, 0.82, 0.42)
+        } else {
+            Color::srgb(0.96, 0.70, 0.32)
+        };
+    }
+}
+
+fn sync_character_panel(
+    database: Res<GameDatabase>,
+    profile: Res<PlayerProfile>,
+    run: Res<RunState>,
+    ui_state: Res<UiState>,
+    player_query: Query<&Health, With<Player>>,
+    mut visibility_query: Query<&mut Visibility, With<CharacterPanelPiece>>,
+    mut text_query: Query<(&CharacterPanelText, &mut Text2d)>,
+) {
+    let is_visible = ui_state.active_panel == ActivePanel::Character;
+    for mut visibility in &mut visibility_query {
+        *visibility = if is_visible {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
+    }
+
+    if !is_visible {
+        return;
+    }
+
+    let map = &database.maps[run.map_index];
+    let class = profile.class(&database);
+    let stats = profile.derived_stats(&database);
+    let attributes = profile.attributes(&database);
+    let health_text = player_query
+        .single()
+        .map(|health| format!("{:.0}/{:.0}", health.current.max(0.0), health.max))
+        .unwrap_or_else(|_| "--".into());
+
+    for (kind, mut text) in &mut text_query {
+        text.0 = match kind {
+            CharacterPanelText::Header => format!("Character Profile  |  {}", class.name),
+            CharacterPanelText::Status => format!(
+                "Status\nLevel {}\nEXP {}/{}\nHP {}\nGold {}\nMap {} {}/{}\nRespawns {}",
+                profile.level,
+                profile.xp,
+                profile.xp_to_next_level(),
+                health_text,
+                profile.gold,
+                map.name,
+                run.enemies_defeated,
+                run.enemies_total,
+                profile.respawns,
+            ),
+            CharacterPanelText::Combat => format!(
+                "Combat\nDamage {:.0}\nArmor {:.0}\nAttacks/sec {:.2}\nLoot bonus +{:.0}%",
+                stats.damage, stats.armor, stats.attacks_per_second, stats.loot_bonus,
+            ),
+            CharacterPanelText::Attributes => format!(
+                "Attributes\nStrength {}\nDexterity {}\nIntelligence {}\nVitality {}",
+                attributes.strength,
+                attributes.dexterity,
+                attributes.intelligence,
+                attributes.vitality
+            ),
+            CharacterPanelText::Equipment => equipment_summary(&profile, &database),
+            CharacterPanelText::Talents => talent_summary(&profile, &database),
+            CharacterPanelText::Upgrades => upgrade_summary(&profile, &database),
+        };
+    }
+}
+
 fn update_item_tooltip(
     database: Res<GameDatabase>,
     profile: Res<PlayerProfile>,
@@ -1921,8 +2226,6 @@ fn sync_hud_text(
                 attributes.intelligence,
                 attributes.vitality
             ),
-            HudText::Equipment => equipment_summary(&profile, &database),
-            HudText::Talents => talent_summary(&profile, &database),
             HudText::Message => format!(
                 "{}  |  {} {}/{}",
                 run.message, map.name, run.enemies_defeated, run.enemies_total
@@ -1963,6 +2266,30 @@ fn talent_summary(profile: &PlayerProfile, database: &GameDatabase) -> String {
         ));
     }
     lines.join("\n")
+}
+
+fn upgrade_summary(profile: &PlayerProfile, database: &GameDatabase) -> String {
+    let class = profile.class(database);
+    let mut damage_bonus = 0.0;
+    let mut health_bonus = 0.0;
+    let mut loot_bonus = 0.0;
+
+    for (index, points) in profile.allocated_talents.iter().enumerate() {
+        let points = *points as f32;
+        match database.talents[index].grant {
+            TalentGrant::DamagePercent(percent) => damage_bonus += percent * points,
+            TalentGrant::HealthPercent(percent) => health_bonus += percent * points,
+            TalentGrant::LootChance(percent) => loot_bonus += percent * points,
+        }
+    }
+
+    format!(
+        "Upgrades\nDamage talents +{damage_bonus:.0}%\nHealth talents +{health_bonus:.0}%\nLoot chance +{loot_bonus:.0}%\n\nNext level gains\n+{} STR  +{} DEX\n+{} INT  +{} VIT",
+        class.growth.strength,
+        class.growth.dexterity,
+        class.growth.intelligence,
+        class.growth.vitality,
+    )
 }
 
 fn spawn_placeholder_actor<T: Bundle>(
