@@ -149,6 +149,12 @@ pub(crate) struct ItemTooltipBackground;
 pub(crate) struct ItemTooltipText;
 
 #[derive(Component)]
+pub(crate) struct EquippedTooltipBackground;
+
+#[derive(Component)]
+pub(crate) struct EquippedTooltipText;
+
+#[derive(Component)]
 pub(crate) struct DraggedItemVisual;
 
 #[derive(Component)]

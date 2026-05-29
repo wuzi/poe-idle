@@ -3,15 +3,19 @@ use bevy::sprite::Anchor;
 
 use crate::components::{
     ActivePanel, BottomButton, BottomButtonLabel, CharacterPanelPiece, CharacterPanelText,
-    DraggedItem, DraggedItemVisual, Health, HudText, InventoryCell, InventoryCellLabel,
-    InventoryPanelPiece, InventorySource, ItemTooltipBackground, ItemTooltipText, Player,
-    PortalPanelPiece, PortalToggleButton, PortalToggleButtonLabel, ProgressBarFill, ScreenFixed,
-    UiState,
+    DraggedItem, DraggedItemVisual, EquippedTooltipBackground, EquippedTooltipText, Health,
+    HudText, InventoryCell, InventoryCellLabel, InventoryPanelPiece, InventorySource,
+    ItemTooltipBackground, ItemTooltipText, Player, PortalPanelPiece, PortalToggleButton,
+    PortalToggleButtonLabel, ProgressBarFill, ScreenFixed, UiState,
 };
 use crate::constants::{
     BOTTOM_BUTTON_SIZE, INVENTORY_CELL_SIZE, MAP_PROGRESS_LEFT, MAP_PROGRESS_WIDTH, MAP_PROGRESS_Y,
     TOOLTIP_PADDING, TOOLTIP_WIDTH, WINDOW_HEIGHT, WINDOW_WIDTH,
 };
+
+const TOOLTIP_LINE_HEIGHT: f32 = 17.0;
+const TOOLTIP_GAP: f32 = 10.0;
+const TOOLTIP_WRAP_CHARS: usize = 32;
 use crate::data::{
     GameDatabase, ItemInstance, ItemLocation, ItemSlot, PlayerProfile, Rarity, RunState, RunStatus,
     TalentGrant, item_armor_bonus, item_attack_speed_bonus, item_crit_chance_bonus,
@@ -617,6 +621,36 @@ fn spawn_item_tooltip(commands: &mut Commands) {
         },
         ItemTooltipText,
     ));
+
+    commands.spawn((
+        Sprite::from_color(
+            Color::srgba(0.05, 0.045, 0.04, 0.96),
+            Vec2::new(TOOLTIP_WIDTH, 120.0),
+        ),
+        Transform::from_translation(background_offset),
+        Visibility::Hidden,
+        ScreenFixed {
+            offset: background_offset,
+        },
+        EquippedTooltipBackground,
+    ));
+
+    commands.spawn((
+        Text2d::new(""),
+        TextFont {
+            font_size: 14.0,
+            ..default()
+        },
+        TextColor(Color::srgb(0.93, 0.90, 0.82)),
+        TextLayout::new_with_justify(Justify::Left),
+        Anchor::TOP_LEFT,
+        Transform::from_translation(text_offset),
+        Visibility::Hidden,
+        ScreenFixed {
+            offset: text_offset,
+        },
+        EquippedTooltipText,
+    ));
 }
 
 fn spawn_dragged_item_visual(commands: &mut Commands) {
@@ -911,11 +945,21 @@ pub(crate) fn update_item_tooltip(
     window_query: Query<&Window>,
     cell_query: Query<
         (&InventoryCell, &ScreenFixed),
-        (Without<ItemTooltipBackground>, Without<ItemTooltipText>),
+        (
+            Without<ItemTooltipBackground>,
+            Without<ItemTooltipText>,
+            Without<EquippedTooltipBackground>,
+            Without<EquippedTooltipText>,
+        ),
     >,
     mut background_query: Query<
         (&mut ScreenFixed, &mut Sprite, &mut Visibility),
-        (With<ItemTooltipBackground>, Without<ItemTooltipText>),
+        (
+            With<ItemTooltipBackground>,
+            Without<ItemTooltipText>,
+            Without<EquippedTooltipBackground>,
+            Without<EquippedTooltipText>,
+        ),
     >,
     mut text_query: Query<
         (
@@ -924,7 +968,35 @@ pub(crate) fn update_item_tooltip(
             &mut TextColor,
             &mut Visibility,
         ),
-        (With<ItemTooltipText>, Without<ItemTooltipBackground>),
+        (
+            With<ItemTooltipText>,
+            Without<ItemTooltipBackground>,
+            Without<EquippedTooltipBackground>,
+            Without<EquippedTooltipText>,
+        ),
+    >,
+    mut equipped_background_query: Query<
+        (&mut ScreenFixed, &mut Sprite, &mut Visibility),
+        (
+            With<EquippedTooltipBackground>,
+            Without<EquippedTooltipText>,
+            Without<ItemTooltipBackground>,
+            Without<ItemTooltipText>,
+        ),
+    >,
+    mut equipped_text_query: Query<
+        (
+            &mut ScreenFixed,
+            &mut Text2d,
+            &mut TextColor,
+            &mut Visibility,
+        ),
+        (
+            With<EquippedTooltipText>,
+            Without<EquippedTooltipBackground>,
+            Without<ItemTooltipBackground>,
+            Without<ItemTooltipText>,
+        ),
     >,
 ) {
     let Ok((mut background_fixed, mut background_sprite, mut background_visibility)) =
@@ -937,21 +1009,44 @@ pub(crate) fn update_item_tooltip(
     else {
         return;
     };
+    let Ok((
+        mut equipped_background_fixed,
+        mut equipped_background_sprite,
+        mut equipped_background_visibility,
+    )) = equipped_background_query.single_mut()
+    else {
+        return;
+    };
+    let Ok((
+        mut equipped_text_fixed,
+        mut equipped_text,
+        mut equipped_text_color,
+        mut equipped_text_visibility,
+    )) = equipped_text_query.single_mut()
+    else {
+        return;
+    };
 
     if ui_state.active_panel != ActivePanel::Inventory || ui_state.dragged_item.is_some() {
         *background_visibility = Visibility::Hidden;
         *text_visibility = Visibility::Hidden;
+        *equipped_background_visibility = Visibility::Hidden;
+        *equipped_text_visibility = Visibility::Hidden;
         return;
     }
 
     let Ok(window) = window_query.single() else {
         *background_visibility = Visibility::Hidden;
         *text_visibility = Visibility::Hidden;
+        *equipped_background_visibility = Visibility::Hidden;
+        *equipped_text_visibility = Visibility::Hidden;
         return;
     };
     let Some(cursor_position) = window.cursor_position() else {
         *background_visibility = Visibility::Hidden;
         *text_visibility = Visibility::Hidden;
+        *equipped_background_visibility = Visibility::Hidden;
+        *equipped_text_visibility = Visibility::Hidden;
         return;
     };
 
@@ -964,46 +1059,44 @@ pub(crate) fn update_item_tooltip(
         let within_x = (cursor_offset.x - fixed.offset.x).abs() <= half_cell;
         let within_y = (cursor_offset.y - fixed.offset.y).abs() <= half_cell;
         if within_x && within_y {
-            item_for_cell(cell, &profile)
+            item_for_cell(cell, &profile).map(|item| (cell.source, item))
         } else {
             None
         }
     });
 
-    let Some(item) = hovered_item else {
+    let Some((source, item)) = hovered_item else {
         *background_visibility = Visibility::Hidden;
         *text_visibility = Visibility::Hidden;
+        *equipped_background_visibility = Visibility::Hidden;
+        *equipped_text_visibility = Visibility::Hidden;
         return;
     };
 
-    tooltip_text.0 = item_tooltip_text(item, &database);
-    let line_count = tooltip_text.0.lines().count() as f32;
-    let tooltip_height = (line_count * 17.0 + TOOLTIP_PADDING * 2.0).max(110.0);
-    let mut top_left = cursor_offset + Vec2::new(18.0, -18.0);
-    let right_edge = WINDOW_WIDTH as f32 * 0.5 - TOOLTIP_PADDING;
-    let left_edge = -(WINDOW_WIDTH as f32) * 0.5 + TOOLTIP_PADDING;
-    let top_edge = WINDOW_HEIGHT as f32 * 0.5 - TOOLTIP_PADDING;
-    let bottom_edge = -(WINDOW_HEIGHT as f32) * 0.5 + TOOLTIP_PADDING;
-
-    if top_left.x + TOOLTIP_WIDTH > right_edge {
-        top_left.x = cursor_offset.x - TOOLTIP_WIDTH - 18.0;
+    tooltip_text.0 = item_tooltip_text(item, &database, None);
+    let primary_tooltip_height = tooltip_height(&tooltip_text.0);
+    let slot = database.items[item.def_id].slot;
+    let equipped_item = if source == InventorySource::Equipment {
+        None
+    } else {
+        profile.equipment[slot.index()].as_ref()
+    };
+    if let Some(equipped_item) = equipped_item {
+        equipped_text.0 = item_tooltip_text(equipped_item, &database, Some("Equipped"));
     }
-    if top_left.x < left_edge {
-        top_left.x = left_edge;
-    }
-    if top_left.y > top_edge {
-        top_left.y = top_edge;
-    }
-    if top_left.y - tooltip_height < bottom_edge {
-        top_left.y = bottom_edge + tooltip_height;
-    }
+    let equipped_tooltip_height = equipped_item
+        .map(|_| tooltip_height(&equipped_text.0))
+        .unwrap_or(0.0);
+    let max_tooltip_height = primary_tooltip_height.max(equipped_tooltip_height);
+    let (top_left, equipped_top_left) =
+        tooltip_positions(cursor_offset, max_tooltip_height, equipped_item.is_some());
 
     let rarity_tint = rarity_color(item.rarity);
-    background_sprite.custom_size = Some(Vec2::new(TOOLTIP_WIDTH, tooltip_height));
+    background_sprite.custom_size = Some(Vec2::new(TOOLTIP_WIDTH, primary_tooltip_height));
     background_sprite.color = rarity_tint.mix(&Color::srgba(0.03, 0.025, 0.025, 0.96), 0.82);
     background_fixed.offset = Vec3::new(
         top_left.x + TOOLTIP_WIDTH * 0.5,
-        top_left.y - tooltip_height * 0.5,
+        top_left.y - primary_tooltip_height * 0.5,
         background_fixed.offset.z,
     );
     text_fixed.offset = Vec3::new(
@@ -1014,6 +1107,72 @@ pub(crate) fn update_item_tooltip(
     tooltip_color.0 = Color::srgb(0.95, 0.92, 0.84);
     *background_visibility = Visibility::Visible;
     *text_visibility = Visibility::Visible;
+
+    if let (Some(equipped_item), Some(equipped_top_left)) = (equipped_item, equipped_top_left) {
+        let equipped_rarity_tint = rarity_color(equipped_item.rarity);
+        equipped_background_sprite.custom_size =
+            Some(Vec2::new(TOOLTIP_WIDTH, equipped_tooltip_height));
+        equipped_background_sprite.color =
+            equipped_rarity_tint.mix(&Color::srgba(0.03, 0.025, 0.025, 0.96), 0.82);
+        equipped_background_fixed.offset = Vec3::new(
+            equipped_top_left.x + TOOLTIP_WIDTH * 0.5,
+            equipped_top_left.y - equipped_tooltip_height * 0.5,
+            equipped_background_fixed.offset.z,
+        );
+        equipped_text_fixed.offset = Vec3::new(
+            equipped_top_left.x + TOOLTIP_PADDING,
+            equipped_top_left.y - TOOLTIP_PADDING,
+            equipped_text_fixed.offset.z,
+        );
+        equipped_text_color.0 = Color::srgb(0.95, 0.92, 0.84);
+        *equipped_background_visibility = Visibility::Visible;
+        *equipped_text_visibility = Visibility::Visible;
+    } else {
+        *equipped_background_visibility = Visibility::Hidden;
+        *equipped_text_visibility = Visibility::Hidden;
+    }
+}
+
+fn tooltip_height(text: &str) -> f32 {
+    let line_count = text.lines().count() as f32;
+    (line_count * TOOLTIP_LINE_HEIGHT + TOOLTIP_PADDING * 2.0).max(110.0)
+}
+
+fn tooltip_positions(
+    cursor_offset: Vec2,
+    max_tooltip_height: f32,
+    has_comparison: bool,
+) -> (Vec2, Option<Vec2>) {
+    let right_edge = WINDOW_WIDTH as f32 * 0.5 - TOOLTIP_PADDING;
+    let left_edge = -(WINDOW_WIDTH as f32) * 0.5 + TOOLTIP_PADDING;
+    let top_edge = WINDOW_HEIGHT as f32 * 0.5 - TOOLTIP_PADDING;
+    let bottom_edge = -(WINDOW_HEIGHT as f32) * 0.5 + TOOLTIP_PADDING;
+    let total_width = if has_comparison {
+        TOOLTIP_WIDTH * 2.0 + TOOLTIP_GAP
+    } else {
+        TOOLTIP_WIDTH
+    };
+
+    let mut group_left = cursor_offset.x + 18.0;
+    if group_left + total_width > right_edge {
+        group_left = cursor_offset.x - total_width - 18.0;
+    }
+    group_left = group_left.clamp(left_edge, right_edge - total_width);
+
+    let mut group_top = cursor_offset.y - 18.0;
+    if group_top > top_edge {
+        group_top = top_edge;
+    }
+    if group_top - max_tooltip_height < bottom_edge {
+        group_top = bottom_edge + max_tooltip_height;
+    }
+
+    let primary_top_left = Vec2::new(group_left, group_top);
+    let comparison_top_left = has_comparison.then_some(Vec2::new(
+        group_left + TOOLTIP_WIDTH + TOOLTIP_GAP,
+        group_top,
+    ));
+    (primary_top_left, comparison_top_left)
 }
 
 pub(crate) fn sync_inventory_grid(
@@ -1230,7 +1389,11 @@ fn portal_log_lines(message: &str) -> String {
         .join("\n")
 }
 
-fn item_tooltip_text(item: &ItemInstance, database: &GameDatabase) -> String {
+fn item_tooltip_text(
+    item: &ItemInstance,
+    database: &GameDatabase,
+    heading: Option<&str>,
+) -> String {
     let definition = &database.items[item.def_id];
     let damage = item_damage_bonus(item, definition);
     let armor = item_armor_bonus(item, definition);
@@ -1240,14 +1403,19 @@ fn item_tooltip_text(item: &ItemInstance, database: &GameDatabase) -> String {
     let crit_chance = item_crit_chance_bonus(item);
     let crit_damage = item_crit_damage_bonus(item);
     let health_regen = item_health_regen_bonus(item);
-    let mut lines = vec![
+    let mut lines = Vec::new();
+    if let Some(heading) = heading {
+        lines.push(heading.to_string());
+        lines.push(String::new());
+    }
+    lines.extend([
         definition.name.to_string(),
         format!("{} {}", item.rarity.name(), definition.slot.name()),
         format!("Item level {}  |  Power {}", item.item_level, item.power),
         String::new(),
         definition.description.to_string(),
         String::new(),
-    ];
+    ]);
 
     if damage > 0.0 {
         lines.push(format!("Damage +{damage:.0}"));
@@ -1278,7 +1446,47 @@ fn item_tooltip_text(item: &ItemInstance, database: &GameDatabase) -> String {
         lines.push(extra_effect.to_string());
     }
 
-    lines.join("\n")
+    wrap_tooltip_lines(lines)
+}
+
+fn wrap_tooltip_lines(lines: Vec<String>) -> String {
+    lines
+        .into_iter()
+        .flat_map(|line| wrap_tooltip_line(&line))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn wrap_tooltip_line(line: &str) -> Vec<String> {
+    if line.is_empty() || line.chars().count() <= TOOLTIP_WRAP_CHARS {
+        return vec![line.to_string()];
+    }
+
+    let mut wrapped = Vec::new();
+    let mut current_line = String::new();
+
+    for word in line.split_whitespace() {
+        let word_length = word.chars().count();
+        if current_line.is_empty() {
+            current_line = word.chars().take(TOOLTIP_WRAP_CHARS).collect();
+        } else if current_line.chars().count() + 1 + word_length <= TOOLTIP_WRAP_CHARS {
+            current_line.push(' ');
+            current_line.push_str(word);
+        } else {
+            wrapped.push(current_line);
+            current_line = format!(
+                "  {}",
+                word.chars()
+                    .take(TOOLTIP_WRAP_CHARS - 2)
+                    .collect::<String>()
+            );
+        }
+    }
+
+    if !current_line.is_empty() {
+        wrapped.push(current_line);
+    }
+    wrapped
 }
 
 fn equipment_summary(profile: &PlayerProfile, database: &GameDatabase) -> String {
