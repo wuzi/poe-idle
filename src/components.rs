@@ -1,16 +1,26 @@
 use bevy::prelude::*;
 
+use crate::data::ItemInstance;
+
 #[derive(Resource)]
 pub(crate) struct UiState {
     pub(crate) active_panel: ActivePanel,
+    pub(crate) dragged_item: Option<DraggedItem>,
 }
 
 impl Default for UiState {
     fn default() -> Self {
         Self {
             active_panel: ActivePanel::None,
+            dragged_item: None,
         }
     }
+}
+
+pub(crate) struct DraggedItem {
+    pub(crate) source: InventorySource,
+    pub(crate) index: usize,
+    pub(crate) item: ItemInstance,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -104,7 +114,7 @@ pub(crate) struct InventoryCell {
     pub(crate) index: usize,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum InventorySource {
     Inventory,
     Stash,
@@ -119,6 +129,9 @@ pub(crate) struct ItemTooltipBackground;
 
 #[derive(Component)]
 pub(crate) struct ItemTooltipText;
+
+#[derive(Component)]
+pub(crate) struct DraggedItemVisual;
 
 #[derive(Component)]
 pub(crate) struct HealthBar {

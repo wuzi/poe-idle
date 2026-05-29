@@ -328,9 +328,8 @@ pub(crate) fn resolve_combat_outcomes(
             );
             let item_name = describe_item(&item, &database);
             let item_color = database.items[item.def_id].tint;
-            let destination = profile.add_item(item, &database);
+            let destination = profile.add_item(item);
             run.message = match destination {
-                ItemDestination::Equipped => format!("Equipped {item_name}"),
                 ItemDestination::Inventory => format!("Looted {item_name}"),
                 ItemDestination::Stash => format!("Stashed {item_name}"),
                 ItemDestination::Lost => format!("No room for {item_name}"),

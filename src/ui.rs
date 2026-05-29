@@ -2,18 +2,19 @@ use bevy::prelude::*;
 use bevy::sprite::Anchor;
 
 use crate::components::{
-    ActivePanel, BottomButton, BottomButtonLabel, CharacterPanelPiece, CharacterPanelText, Health,
-    HudText, InventoryCell, InventoryPanelPiece, InventorySource, ItemTooltipBackground,
-    ItemTooltipText, Player, ProgressBarFill, ScreenFixed, UiState,
+    ActivePanel, BottomButton, BottomButtonLabel, CharacterPanelPiece, CharacterPanelText,
+    DraggedItem, DraggedItemVisual, Health, HudText, InventoryCell, InventoryPanelPiece,
+    InventorySource, ItemTooltipBackground, ItemTooltipText, Player, ProgressBarFill, ScreenFixed,
+    UiState,
 };
 use crate::constants::{
     BOTTOM_BUTTON_SIZE, INVENTORY_CELL_SIZE, TOOLTIP_PADDING, TOOLTIP_WIDTH, WINDOW_HEIGHT,
     WINDOW_WIDTH,
 };
 use crate::data::{
-    GameDatabase, ItemInstance, ItemSlot, PlayerProfile, Rarity, RunState, TalentGrant,
-    item_armor_bonus, item_damage_bonus, item_life_bonus, item_slot_effect, rarity_color,
-    rarity_effect,
+    GameDatabase, ItemInstance, ItemLocation, ItemSlot, PlayerProfile, Rarity, RunState,
+    TalentGrant, item_armor_bonus, item_damage_bonus, item_life_bonus, item_slot_effect,
+    rarity_color, rarity_effect,
 };
 
 pub(crate) fn spawn_screen_layout(commands: &mut Commands) {
@@ -107,6 +108,7 @@ pub(crate) fn spawn_screen_layout(commands: &mut Commands) {
     );
     spawn_character_panel(commands);
     spawn_item_tooltip(commands);
+    spawn_dragged_item_visual(commands);
 }
 
 fn spawn_inventory_cells(
@@ -377,6 +379,20 @@ fn spawn_item_tooltip(commands: &mut Commands) {
     ));
 }
 
+fn spawn_dragged_item_visual(commands: &mut Commands) {
+    let offset = Vec3::new(0.0, 0.0, 58.0);
+    commands.spawn((
+        Sprite::from_color(
+            Color::srgba(0.72, 0.72, 0.68, 0.92),
+            Vec2::splat(INVENTORY_CELL_SIZE * 0.88),
+        ),
+        Transform::from_translation(offset),
+        Visibility::Hidden,
+        ScreenFixed { offset },
+        DraggedItemVisual,
+    ));
+}
+
 pub(crate) fn handle_bottom_buttons(
     mut ui_state: ResMut<UiState>,
     mouse: Res<ButtonInput<MouseButton>>,
@@ -442,6 +458,88 @@ pub(crate) fn sync_inventory_panel(
             Visibility::Hidden
         };
     }
+}
+
+pub(crate) fn handle_inventory_input(
+    mut ui_state: ResMut<UiState>,
+    database: Res<GameDatabase>,
+    mut profile: ResMut<PlayerProfile>,
+    mouse: Res<ButtonInput<MouseButton>>,
+    window_query: Query<&Window>,
+    cell_query: Query<(&InventoryCell, &ScreenFixed)>,
+) {
+    if ui_state.active_panel != ActivePanel::Inventory {
+        ui_state.dragged_item = None;
+        return;
+    }
+
+    let Some(cursor_offset) = cursor_offset(&window_query) else {
+        if mouse.just_released(MouseButton::Left) {
+            ui_state.dragged_item = None;
+        }
+        return;
+    };
+    let hovered_cell = hovered_inventory_cell(cursor_offset, &cell_query);
+
+    if mouse.just_pressed(MouseButton::Right) {
+        if let Some((source, index)) = hovered_cell {
+            ui_state.dragged_item = None;
+            profile.use_item_at(item_location(source, index), &database);
+        }
+        return;
+    }
+
+    if mouse.just_pressed(MouseButton::Left) {
+        ui_state.dragged_item = hovered_cell.and_then(|(source, index)| {
+            profile
+                .item_at(item_location(source, index))
+                .cloned()
+                .map(|item| DraggedItem {
+                    source,
+                    index,
+                    item,
+                })
+        });
+    }
+
+    if mouse.just_released(MouseButton::Left) {
+        if let Some(dragged_item) = ui_state.dragged_item.take() {
+            if let Some((target_source, target_index)) = hovered_cell {
+                profile.move_item(
+                    item_location(dragged_item.source, dragged_item.index),
+                    item_location(target_source, target_index),
+                    &database,
+                );
+            }
+        }
+    }
+}
+
+pub(crate) fn sync_dragged_item_visual(
+    database: Res<GameDatabase>,
+    ui_state: Res<UiState>,
+    window_query: Query<&Window>,
+    mut query: Query<(&mut ScreenFixed, &mut Sprite, &mut Visibility), With<DraggedItemVisual>>,
+) {
+    let Ok((mut fixed, mut sprite, mut visibility)) = query.single_mut() else {
+        return;
+    };
+    let Some(dragged_item) = &ui_state.dragged_item else {
+        *visibility = Visibility::Hidden;
+        return;
+    };
+    let Some(cursor_offset) = cursor_offset(&window_query) else {
+        *visibility = Visibility::Hidden;
+        return;
+    };
+    if ui_state.active_panel != ActivePanel::Inventory {
+        *visibility = Visibility::Hidden;
+        return;
+    }
+
+    fixed.offset = Vec3::new(cursor_offset.x, cursor_offset.y, fixed.offset.z);
+    sprite.color = item_cell_color(&dragged_item.item, &database);
+    *visibility = Visibility::Visible;
 }
 
 pub(crate) fn sync_character_panel(
@@ -542,7 +640,7 @@ pub(crate) fn update_item_tooltip(
         return;
     };
 
-    if ui_state.active_panel != ActivePanel::Inventory {
+    if ui_state.active_panel != ActivePanel::Inventory || ui_state.dragged_item.is_some() {
         *background_visibility = Visibility::Hidden;
         *text_visibility = Visibility::Hidden;
         return;
@@ -623,22 +721,70 @@ pub(crate) fn update_item_tooltip(
 pub(crate) fn sync_inventory_grid(
     database: Res<GameDatabase>,
     profile: Res<PlayerProfile>,
+    ui_state: Res<UiState>,
     mut query: Query<(&InventoryCell, &mut Sprite)>,
 ) {
     for (cell, mut sprite) in &mut query {
         let item = item_for_cell(cell, &profile);
+        let is_drag_source = ui_state.dragged_item.as_ref().is_some_and(|dragged_item| {
+            dragged_item.source == cell.source && dragged_item.index == cell.index
+        });
 
-        sprite.color = if let Some(item) = item {
-            let definition = &database.items[item.def_id];
-            let _asset_key = definition.asset_key;
-            match item.rarity {
-                Rarity::Normal => definition.tint,
-                Rarity::Magic => definition.tint.mix(&Color::srgb(0.35, 0.55, 1.0), 0.45),
-                Rarity::Rare => definition.tint.mix(&Color::srgb(1.0, 0.74, 0.24), 0.55),
-            }
+        let color = if let Some(item) = item {
+            item_cell_color(item, &database)
         } else {
             Color::srgba(0.10, 0.10, 0.11, 0.98)
         };
+        sprite.color = if is_drag_source {
+            color.mix(&Color::srgba(0.02, 0.02, 0.02, 0.98), 0.45)
+        } else {
+            color
+        };
+    }
+}
+
+fn cursor_offset(window_query: &Query<&Window>) -> Option<Vec2> {
+    window_query.single().ok().and_then(|window| {
+        window.cursor_position().map(|position| {
+            Vec2::new(
+                position.x - WINDOW_WIDTH as f32 * 0.5,
+                WINDOW_HEIGHT as f32 * 0.5 - position.y,
+            )
+        })
+    })
+}
+
+fn hovered_inventory_cell(
+    cursor_offset: Vec2,
+    cell_query: &Query<(&InventoryCell, &ScreenFixed)>,
+) -> Option<(InventorySource, usize)> {
+    cell_query.iter().find_map(|(cell, fixed)| {
+        let half_cell = INVENTORY_CELL_SIZE * 0.5;
+        let within_x = (cursor_offset.x - fixed.offset.x).abs() <= half_cell;
+        let within_y = (cursor_offset.y - fixed.offset.y).abs() <= half_cell;
+        if within_x && within_y {
+            Some((cell.source, cell.index))
+        } else {
+            None
+        }
+    })
+}
+
+fn item_location(source: InventorySource, index: usize) -> ItemLocation {
+    match source {
+        InventorySource::Inventory => ItemLocation::Inventory(index),
+        InventorySource::Stash => ItemLocation::Stash(index),
+        InventorySource::Equipment => ItemLocation::Equipment(index),
+    }
+}
+
+fn item_cell_color(item: &ItemInstance, database: &GameDatabase) -> Color {
+    let definition = &database.items[item.def_id];
+    let _asset_key = definition.asset_key;
+    match item.rarity {
+        Rarity::Normal => definition.tint,
+        Rarity::Magic => definition.tint.mix(&Color::srgb(0.35, 0.55, 1.0), 0.45),
+        Rarity::Rare => definition.tint.mix(&Color::srgb(1.0, 0.74, 0.24), 0.55),
     }
 }
 

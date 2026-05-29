@@ -8,8 +8,8 @@ use crate::gameplay::{
     resolve_combat_outcomes, spawn_enemy_packs,
 };
 use crate::ui::{
-    handle_bottom_buttons, sync_character_panel, sync_hud_text, sync_inventory_grid,
-    sync_inventory_panel, update_item_tooltip,
+    handle_bottom_buttons, handle_inventory_input, sync_character_panel, sync_dragged_item_visual,
+    sync_hud_text, sync_inventory_grid, sync_inventory_panel, update_item_tooltip,
 };
 use crate::visual::{
     camera_follow, setup, sync_character_visuals, sync_health_bars, sync_progress_bar,
@@ -37,25 +37,33 @@ pub(crate) fn run() {
         .add_systems(
             Update,
             (
-                handle_map_transitions,
-                spawn_enemy_packs,
-                move_player,
-                move_enemies,
-                player_attack,
-                enemies_attack,
-                resolve_combat_outcomes,
-                tick_timed_entities,
-                sync_health_bars,
-                sync_character_visuals,
-                camera_follow,
-                handle_bottom_buttons,
-                sync_inventory_panel,
-                update_item_tooltip,
-                sync_character_panel,
-                sync_screen_fixed_entities,
-                sync_progress_bar,
-                sync_inventory_grid,
-                sync_hud_text,
+                (
+                    handle_map_transitions,
+                    spawn_enemy_packs,
+                    move_player,
+                    move_enemies,
+                    player_attack,
+                    enemies_attack,
+                    resolve_combat_outcomes,
+                    tick_timed_entities,
+                    sync_health_bars,
+                    sync_character_visuals,
+                    camera_follow,
+                )
+                    .chain(),
+                (
+                    handle_bottom_buttons,
+                    sync_inventory_panel,
+                    handle_inventory_input,
+                    update_item_tooltip,
+                    sync_character_panel,
+                    sync_dragged_item_visual,
+                    sync_screen_fixed_entities,
+                    sync_progress_bar,
+                    sync_inventory_grid,
+                    sync_hud_text,
+                )
+                    .chain(),
             )
                 .chain(),
         )

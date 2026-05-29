@@ -599,15 +599,7 @@ impl PlayerProfile {
         }
     }
 
-    pub(crate) fn add_item(
-        &mut self,
-        item: ItemInstance,
-        database: &GameDatabase,
-    ) -> ItemDestination {
-        if self.try_auto_equip(item.clone(), database) {
-            return ItemDestination::Equipped;
-        }
-
+    pub(crate) fn add_item(&mut self, item: ItemInstance) -> ItemDestination {
         if let Some(slot) = self.inventory.iter_mut().find(|slot| slot.is_none()) {
             *slot = Some(item);
             return ItemDestination::Inventory;
@@ -621,26 +613,112 @@ impl PlayerProfile {
         ItemDestination::Lost
     }
 
-    pub(crate) fn try_auto_equip(&mut self, item: ItemInstance, database: &GameDatabase) -> bool {
-        let slot_index = database.items[item.def_id].slot.index();
-        let is_upgrade = self.equipment[slot_index]
-            .as_ref()
-            .map(|equipped| item.power > equipped.power)
-            .unwrap_or(true);
+    pub(crate) fn item_at(&self, location: ItemLocation) -> Option<&ItemInstance> {
+        match location {
+            ItemLocation::Inventory(index) => self.inventory.get(index),
+            ItemLocation::Stash(index) => self.stash.get(index),
+            ItemLocation::Equipment(index) => self.equipment.get(index),
+        }
+        .and_then(Option::as_ref)
+    }
 
-        if !is_upgrade {
+    pub(crate) fn move_item(
+        &mut self,
+        from: ItemLocation,
+        to: ItemLocation,
+        database: &GameDatabase,
+    ) -> bool {
+        if from == to || !self.location_exists(to) {
             return false;
         }
 
-        if let Some(old_item) = self.equipment[slot_index].replace(item) {
-            if let Some(inventory_slot) = self.inventory.iter_mut().find(|slot| slot.is_none()) {
-                *inventory_slot = Some(old_item);
-            } else if let Some(stash_slot) = self.stash.iter_mut().find(|slot| slot.is_none()) {
-                *stash_slot = Some(old_item);
+        let Some(from_item) = self.take_item(from) else {
+            return false;
+        };
+        if !self.can_place_item(to, &from_item, database) {
+            self.place_item_unchecked(from, from_item);
+            return false;
+        }
+
+        let to_item = self.take_item(to);
+        if let Some(item) = &to_item {
+            if !self.can_place_item(from, item, database) {
+                self.place_item_unchecked(to, to_item.expect("checked item should exist"));
+                self.place_item_unchecked(from, from_item);
+                return false;
             }
         }
 
+        self.place_item_unchecked(to, from_item);
+        if let Some(item) = to_item {
+            self.place_item_unchecked(from, item);
+        }
         true
+    }
+
+    pub(crate) fn use_item_at(&mut self, location: ItemLocation, database: &GameDatabase) -> bool {
+        let Some(item) = self.item_at(location) else {
+            return false;
+        };
+
+        match location {
+            ItemLocation::Inventory(_) | ItemLocation::Stash(_) => {
+                let equipment_slot = database.items[item.def_id].slot.index();
+                self.move_item(location, ItemLocation::Equipment(equipment_slot), database)
+            }
+            ItemLocation::Equipment(_) => {
+                if let Some(index) = self.inventory.iter().position(Option::is_none) {
+                    self.move_item(location, ItemLocation::Inventory(index), database)
+                } else if let Some(index) = self.stash.iter().position(Option::is_none) {
+                    self.move_item(location, ItemLocation::Stash(index), database)
+                } else {
+                    false
+                }
+            }
+        }
+    }
+
+    fn location_exists(&self, location: ItemLocation) -> bool {
+        match location {
+            ItemLocation::Inventory(index) => index < self.inventory.len(),
+            ItemLocation::Stash(index) => index < self.stash.len(),
+            ItemLocation::Equipment(index) => index < self.equipment.len(),
+        }
+    }
+
+    fn can_place_item(
+        &self,
+        location: ItemLocation,
+        item: &ItemInstance,
+        database: &GameDatabase,
+    ) -> bool {
+        match location {
+            ItemLocation::Inventory(_) | ItemLocation::Stash(_) => self.location_exists(location),
+            ItemLocation::Equipment(index) => {
+                self.location_exists(location) && database.items[item.def_id].slot.index() == index
+            }
+        }
+    }
+
+    fn take_item(&mut self, location: ItemLocation) -> Option<ItemInstance> {
+        match location {
+            ItemLocation::Inventory(index) => self.inventory.get_mut(index),
+            ItemLocation::Stash(index) => self.stash.get_mut(index),
+            ItemLocation::Equipment(index) => self.equipment.get_mut(index),
+        }
+        .and_then(Option::take)
+    }
+
+    fn place_item_unchecked(&mut self, location: ItemLocation, item: ItemInstance) {
+        let slot = match location {
+            ItemLocation::Inventory(index) => self.inventory.get_mut(index),
+            ItemLocation::Stash(index) => self.stash.get_mut(index),
+            ItemLocation::Equipment(index) => self.equipment.get_mut(index),
+        };
+
+        if let Some(slot) = slot {
+            *slot = Some(item);
+        }
     }
 }
 
@@ -653,10 +731,16 @@ pub(crate) struct DerivedStats {
 }
 
 pub(crate) enum ItemDestination {
-    Equipped,
     Inventory,
     Stash,
     Lost,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ItemLocation {
+    Inventory(usize),
+    Stash(usize),
+    Equipment(usize),
 }
 
 #[derive(Resource)]
@@ -745,8 +829,10 @@ pub(crate) fn seed_starting_equipment(profile: &mut PlayerProfile, database: &Ga
         item_level: 1,
         power: database.items[1].base_power,
     };
-    profile.try_auto_equip(weapon, database);
-    profile.try_auto_equip(shield, database);
+    let weapon_slot = database.items[weapon.def_id].slot.index();
+    let shield_slot = database.items[shield.def_id].slot.index();
+    profile.equipment[weapon_slot] = Some(weapon);
+    profile.equipment[shield_slot] = Some(shield);
 }
 
 pub(crate) fn roll_item(
