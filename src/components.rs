@@ -114,6 +114,12 @@ pub(crate) struct InventoryCell {
     pub(crate) index: usize,
 }
 
+#[derive(Component)]
+pub(crate) struct InventoryCellLabel {
+    pub(crate) source: InventorySource,
+    pub(crate) index: usize,
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum InventorySource {
     Inventory,

@@ -545,33 +545,45 @@ pub(crate) struct ItemStatRolls {
 
 #[derive(Clone, Copy)]
 pub(crate) enum Rarity {
-    Normal,
+    Common,
+    Uncommon,
     Magic,
     Rare,
+    Epic,
+    Legendary,
 }
 
 impl Rarity {
     pub(crate) fn name(self) -> &'static str {
         match self {
-            Rarity::Normal => "Normal",
+            Rarity::Common => "Common",
+            Rarity::Uncommon => "Uncommon",
             Rarity::Magic => "Magic",
             Rarity::Rare => "Rare",
+            Rarity::Epic => "Epic",
+            Rarity::Legendary => "Legendary",
         }
     }
 
     pub(crate) fn multiplier(self) -> u32 {
         match self {
-            Rarity::Normal => 1,
-            Rarity::Magic => 2,
-            Rarity::Rare => 3,
+            Rarity::Common => 1,
+            Rarity::Uncommon => 2,
+            Rarity::Magic => 3,
+            Rarity::Rare => 4,
+            Rarity::Epic => 5,
+            Rarity::Legendary => 7,
         }
     }
 
     fn roll_multiplier(self) -> f32 {
         match self {
-            Rarity::Normal => 1.0,
-            Rarity::Magic => 1.35,
+            Rarity::Common => 1.0,
+            Rarity::Uncommon => 1.15,
+            Rarity::Magic => 1.4,
             Rarity::Rare => 1.85,
+            Rarity::Epic => 2.45,
+            Rarity::Legendary => 3.2,
         }
     }
 }
@@ -1000,9 +1012,12 @@ pub(crate) fn roll_item(
 ) -> ItemInstance {
     let def_id = rng.range(database.items.len());
     let rarity = match rng.percent() {
+        roll if roll >= 99.6 => Rarity::Legendary,
+        roll if roll >= 98.0 => Rarity::Epic,
         roll if roll >= 92.0 => Rarity::Rare,
-        roll if roll >= 68.0 => Rarity::Magic,
-        _ => Rarity::Normal,
+        roll if roll >= 72.0 => Rarity::Magic,
+        roll if roll >= 45.0 => Rarity::Uncommon,
+        _ => Rarity::Common,
     };
     let definition = &database.items[def_id];
     let rolls = roll_item_stats(rng, definition, item_level, rarity);
@@ -1017,7 +1032,7 @@ pub(crate) fn roll_item(
 }
 
 fn starter_item(def_id: usize, database: &GameDatabase) -> ItemInstance {
-    let rarity = Rarity::Normal;
+    let rarity = Rarity::Common;
     let item_level = 1;
     let definition = &database.items[def_id];
     let rolls = minimum_item_stats(definition, item_level, rarity);
@@ -1155,17 +1170,23 @@ pub(crate) fn item_slot_effect(slot: ItemSlot) -> &'static str {
 
 pub(crate) fn rarity_effect(rarity: Rarity) -> Option<&'static str> {
     match rarity {
-        Rarity::Normal => None,
-        Rarity::Magic => Some("Magic effect: stronger single modifier roll."),
-        Rarity::Rare => Some("Rare effect: multiple stronger modifier rolls."),
+        Rarity::Common => None,
+        Rarity::Uncommon => Some("Uncommon effect: slightly stronger roll ranges."),
+        Rarity::Magic => Some("Magic effect: stronger roll ranges."),
+        Rarity::Rare => Some("Rare effect: several strong roll ranges."),
+        Rarity::Epic => Some("Epic effect: exceptional roll ranges."),
+        Rarity::Legendary => Some("Legendary effect: extreme roll ranges."),
     }
 }
 
 pub(crate) fn rarity_color(rarity: Rarity) -> Color {
     match rarity {
-        Rarity::Normal => Color::srgb(0.72, 0.72, 0.68),
-        Rarity::Magic => Color::srgb(0.32, 0.49, 0.95),
-        Rarity::Rare => Color::srgb(0.96, 0.70, 0.26),
+        Rarity::Common => Color::srgb(0.92, 0.92, 0.86),
+        Rarity::Uncommon => Color::srgb(0.20, 0.78, 0.28),
+        Rarity::Magic => Color::srgb(0.26, 0.45, 0.95),
+        Rarity::Rare => Color::srgb(0.96, 0.84, 0.18),
+        Rarity::Epic => Color::srgb(0.68, 0.36, 0.95),
+        Rarity::Legendary => Color::srgb(1.0, 0.55, 0.08),
     }
 }
 

@@ -3,9 +3,9 @@ use bevy::sprite::Anchor;
 
 use crate::components::{
     ActivePanel, BottomButton, BottomButtonLabel, CharacterPanelPiece, CharacterPanelText,
-    DraggedItem, DraggedItemVisual, Health, HudText, InventoryCell, InventoryPanelPiece,
-    InventorySource, ItemTooltipBackground, ItemTooltipText, Player, ProgressBarFill, ScreenFixed,
-    UiState,
+    DraggedItem, DraggedItemVisual, Health, HudText, InventoryCell, InventoryCellLabel,
+    InventoryPanelPiece, InventorySource, ItemTooltipBackground, ItemTooltipText, Player,
+    ProgressBarFill, ScreenFixed, UiState,
 };
 use crate::constants::{
     BOTTOM_BUTTON_SIZE, INVENTORY_CELL_SIZE, TOOLTIP_PADDING, TOOLTIP_WIDTH, WINDOW_HEIGHT,
@@ -138,6 +138,24 @@ fn spawn_inventory_cells(
                 Visibility::Visible,
                 ScreenFixed { offset },
                 InventoryCell { source, index },
+                InventoryPanelPiece,
+            ));
+
+            commands.spawn((
+                Text2d::new(""),
+                TextFont {
+                    font_size: 9.0,
+                    ..default()
+                },
+                TextColor(Color::srgb(0.18, 0.16, 0.13)),
+                TextLayout::new_with_justify(Justify::Center),
+                Anchor::CENTER,
+                Transform::from_translation(offset + Vec3::new(0.0, 0.0, 1.0)),
+                Visibility::Visible,
+                ScreenFixed {
+                    offset: offset + Vec3::new(0.0, 0.0, 1.0),
+                },
+                InventoryCellLabel { source, index },
                 InventoryPanelPiece,
             ));
         }
@@ -729,6 +747,7 @@ pub(crate) fn sync_inventory_grid(
     profile: Res<PlayerProfile>,
     ui_state: Res<UiState>,
     mut query: Query<(&InventoryCell, &mut Sprite)>,
+    mut label_query: Query<(&InventoryCellLabel, &mut Text2d, &mut TextColor)>,
 ) {
     for (cell, mut sprite) in &mut query {
         let item = item_for_cell(cell, &profile);
@@ -746,6 +765,37 @@ pub(crate) fn sync_inventory_grid(
         } else {
             color
         };
+    }
+
+    for (label, mut text, mut text_color) in &mut label_query {
+        let cell = InventoryCell {
+            source: label.source,
+            index: label.index,
+        };
+        let item = item_for_cell(&cell, &profile);
+        let is_drag_source = ui_state.dragged_item.as_ref().is_some_and(|dragged_item| {
+            dragged_item.source == label.source && dragged_item.index == label.index
+        });
+
+        if is_drag_source {
+            text.0.clear();
+            continue;
+        }
+
+        if let Some(item) = item {
+            let definition = &database.items[item.def_id];
+            text.0 = slot_abbreviation(definition.slot).into();
+            text_color.0 = item_label_color(item.rarity);
+        } else if label.source == InventorySource::Equipment {
+            text.0 = ItemSlot::all()
+                .get(label.index)
+                .map(|slot| slot_abbreviation(*slot))
+                .unwrap_or("")
+                .into();
+            text_color.0 = Color::srgba(0.58, 0.53, 0.45, 0.62);
+        } else {
+            text.0.clear();
+        }
     }
 }
 
@@ -787,10 +837,28 @@ fn item_location(source: InventorySource, index: usize) -> ItemLocation {
 fn item_cell_color(item: &ItemInstance, database: &GameDatabase) -> Color {
     let definition = &database.items[item.def_id];
     let _asset_key = definition.asset_key;
-    match item.rarity {
-        Rarity::Normal => definition.tint,
-        Rarity::Magic => definition.tint.mix(&Color::srgb(0.35, 0.55, 1.0), 0.45),
-        Rarity::Rare => definition.tint.mix(&Color::srgb(1.0, 0.74, 0.24), 0.55),
+    rarity_color(item.rarity)
+}
+
+fn item_label_color(rarity: Rarity) -> Color {
+    match rarity {
+        Rarity::Common | Rarity::Uncommon | Rarity::Rare | Rarity::Legendary => {
+            Color::srgb(0.10, 0.09, 0.07)
+        }
+        Rarity::Magic | Rarity::Epic => Color::srgb(0.96, 0.95, 0.90),
+    }
+}
+
+fn slot_abbreviation(slot: ItemSlot) -> &'static str {
+    match slot {
+        ItemSlot::Weapon => "WPN",
+        ItemSlot::Shield => "SHD",
+        ItemSlot::Head => "HEAD",
+        ItemSlot::Chest => "CHST",
+        ItemSlot::Gloves => "GLV",
+        ItemSlot::Legs => "LEG",
+        ItemSlot::Boots => "BOOT",
+        ItemSlot::Trinket => "TRNK",
     }
 }
 
