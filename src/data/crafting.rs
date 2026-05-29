@@ -1,7 +1,7 @@
 use crate::constants::CRAFTING_SLOT_COUNT;
 
 use super::{
-    GameDatabase, ItemDestination, ItemInstance, LootRng, PlayerProfile, Rarity,
+    GameDatabase, ItemDestination, ItemInstance, LootRng, PlayerProfile, Rarity, item_gold_value,
     roll_item_of_rarity,
 };
 
@@ -27,6 +27,11 @@ pub(crate) enum CraftingResult {
     NeedsItems,
     RarityMismatch,
     MaxRarity,
+}
+
+pub(crate) enum LiquidationResult {
+    Liquidated { items: usize, gold: u32 },
+    Empty,
 }
 
 impl PlayerProfile {
@@ -105,6 +110,41 @@ impl PlayerProfile {
         CraftingResult::Crafted {
             item: crafted_item,
             destination,
+        }
+    }
+
+    pub(crate) fn crafting_liquidation_value(&self) -> u32 {
+        self.crafting
+            .iter()
+            .filter_map(Option::as_ref)
+            .fold(0_u32, |total, item| {
+                total.saturating_add(item_gold_value(item))
+            })
+    }
+
+    pub(crate) fn crafting_liquidation_count(&self) -> usize {
+        self.crafting.iter().filter(|slot| slot.is_some()).count()
+    }
+
+    pub(crate) fn liquidate_crafting_items(&mut self) -> LiquidationResult {
+        let mut sold_items = 0;
+        let mut gold = 0_u32;
+
+        for slot in &mut self.crafting {
+            if let Some(item) = slot.take() {
+                sold_items += 1;
+                gold = gold.saturating_add(item_gold_value(&item));
+            }
+        }
+
+        if sold_items == 0 {
+            return LiquidationResult::Empty;
+        }
+
+        self.gold = self.gold.saturating_add(gold);
+        LiquidationResult::Liquidated {
+            items: sold_items,
+            gold,
         }
     }
 }

@@ -28,8 +28,8 @@ const TOOLTIP_WRAP_CHARS: usize = 32;
 use crate::data::{
     GameDatabase, ItemInstance, ItemLocation, ItemSlot, PlayerProfile, Rarity, RunState, RunStatus,
     TalentNode, item_armor_bonus, item_attack_speed_bonus, item_crit_chance_bonus,
-    item_crit_damage_bonus, item_damage_bonus, item_health_regen_bonus, item_life_bonus,
-    item_move_speed_bonus, item_slot_effect, rarity_color, rarity_effect,
+    item_crit_damage_bonus, item_damage_bonus, item_gold_value, item_health_regen_bonus,
+    item_life_bonus, item_move_speed_bonus, item_slot_effect, rarity_color, rarity_effect,
 };
 
 pub(crate) fn spawn_screen_layout(commands: &mut Commands, talents: &[TalentNode]) {
@@ -1505,6 +1505,7 @@ fn item_tooltip_text(
         definition.name.to_string(),
         format!("{} {}", item.rarity.name(), definition.slot.name()),
         format!("Item level {}  |  Power {}", item.item_level, item.power),
+        format!("Value {} gold", item_gold_value(item)),
         String::new(),
         definition.description.to_string(),
         String::new(),

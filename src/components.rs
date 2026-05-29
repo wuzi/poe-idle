@@ -154,10 +154,19 @@ pub(crate) struct TalentResetLabel;
 #[derive(Component)]
 pub(crate) struct CraftingButton {
     pub(crate) size: Vec2,
+    pub(crate) action: CraftingAction,
 }
 
 #[derive(Component)]
-pub(crate) struct CraftingButtonLabel;
+pub(crate) struct CraftingButtonLabel {
+    pub(crate) action: CraftingAction,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CraftingAction {
+    RarityUpgrade,
+    Liquidate,
+}
 
 #[derive(Component)]
 pub(crate) struct CraftingInfoText;

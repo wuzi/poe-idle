@@ -2,31 +2,36 @@ use bevy::prelude::*;
 use bevy::sprite::Anchor;
 
 use crate::components::{
-    ActivePanel, CraftingButton, CraftingButtonLabel, CraftingInfoText, CraftingPanelPiece,
-    InventorySource, ScreenFixed, UiState,
+    ActivePanel, CraftingAction, CraftingButton, CraftingButtonLabel, CraftingInfoText,
+    CraftingPanelPiece, InventorySource, ScreenFixed, UiState,
 };
 use crate::constants::CRAFTING_SLOT_COUNT;
 use crate::data::{
-    CraftingDestination, CraftingPreview, CraftingResult, GameDatabase, ItemLocation, LootRng,
-    PlayerProfile, describe_item,
+    CraftingDestination, CraftingPreview, CraftingResult, GameDatabase, ItemLocation,
+    LiquidationResult, LootRng, PlayerProfile, describe_item,
 };
 
 use super::{cursor_offset, item_location, spawn_inventory_cells};
 
-fn spawn_crafting_button(commands: &mut Commands, offset: Vec3) {
-    let size = Vec2::new(92.0, 34.0);
+fn spawn_crafting_button(
+    commands: &mut Commands,
+    action: CraftingAction,
+    label: &'static str,
+    offset: Vec3,
+) {
+    let size = Vec2::new(112.0, 34.0);
     commands.spawn((
         Sprite::from_color(Color::srgba(0.30, 0.11, 0.04, 0.98), size),
         Transform::from_translation(offset),
         Visibility::Hidden,
         ScreenFixed { offset },
         CraftingPanelPiece,
-        CraftingButton { size },
+        CraftingButton { size, action },
     ));
 
     let text_offset = offset + Vec3::new(0.0, 5.0, 1.0);
     commands.spawn((
-        Text2d::new("CRAFT"),
+        Text2d::new(label),
         TextFont {
             font_size: 12.0,
             ..default()
@@ -40,7 +45,7 @@ fn spawn_crafting_button(commands: &mut Commands, offset: Vec3) {
             offset: text_offset,
         },
         CraftingPanelPiece,
-        CraftingButtonLabel,
+        CraftingButtonLabel { action },
     ));
 }
 
@@ -163,7 +168,18 @@ pub(super) fn spawn_crafting_panel(commands: &mut Commands) {
         1,
         46.0,
     );
-    spawn_crafting_button(commands, Vec3::new(34.0, 120.0, 48.0));
+    spawn_crafting_button(
+        commands,
+        CraftingAction::RarityUpgrade,
+        "CRAFT",
+        Vec3::new(-36.0, 120.0, 48.0),
+    );
+    spawn_crafting_button(
+        commands,
+        CraftingAction::Liquidate,
+        "LIQUIDATE",
+        Vec3::new(106.0, 120.0, 48.0),
+    );
     spawn_crafting_info_text(commands, Vec3::new(-108.0, 82.0, 48.0));
 }
 
@@ -217,25 +233,38 @@ pub(crate) fn handle_crafting_input(
         return;
     };
 
-    let button_hovered = button_query.iter().any(|(button, fixed)| {
+    let clicked_action = button_query.iter().find_map(|(button, fixed)| {
         let half_size = button.size * 0.5;
-        (cursor_offset.x - fixed.offset.x).abs() <= half_size.x
-            && (cursor_offset.y - fixed.offset.y).abs() <= half_size.y
+        let hovered = (cursor_offset.x - fixed.offset.x).abs() <= half_size.x
+            && (cursor_offset.y - fixed.offset.y).abs() <= half_size.y;
+        hovered.then_some(button.action)
     });
 
-    if !button_hovered || !mouse.just_pressed(MouseButton::Left) {
+    let Some(clicked_action) = clicked_action else {
+        return;
+    };
+
+    if !mouse.just_pressed(MouseButton::Left) {
         return;
     }
 
-    ui_state.crafting_message = match profile.craft_rarity_upgrade(&database, &mut rng) {
-        CraftingResult::Crafted { item, destination } => format!(
-            "Crafted {}\nSent to {}",
-            describe_item(&item, &database),
-            crafting_destination_name(destination)
-        ),
-        CraftingResult::NeedsItems => "Add 5 matching items".to_string(),
-        CraftingResult::RarityMismatch => "Rarities must match".to_string(),
-        CraftingResult::MaxRarity => "Legendary cannot upgrade".to_string(),
+    ui_state.crafting_message = match clicked_action {
+        CraftingAction::RarityUpgrade => match profile.craft_rarity_upgrade(&database, &mut rng) {
+            CraftingResult::Crafted { item, destination } => format!(
+                "Crafted {}\nSent to {}",
+                describe_item(&item, &database),
+                crafting_destination_name(destination)
+            ),
+            CraftingResult::NeedsItems => "Add 5 matching items".to_string(),
+            CraftingResult::RarityMismatch => "Rarities must match".to_string(),
+            CraftingResult::MaxRarity => "Legendary cannot upgrade".to_string(),
+        },
+        CraftingAction::Liquidate => match profile.liquidate_crafting_items() {
+            LiquidationResult::Liquidated { items, gold } => {
+                format!("Liquidated {} {}\n+{} gold", items, item_word(items), gold)
+            }
+            LiquidationResult::Empty => "Add items to liquidate".to_string(),
+        },
     };
 }
 
@@ -245,7 +274,7 @@ pub(crate) fn sync_crafting_panel(
     window_query: Query<&Window>,
     mut visibility_query: Query<&mut Visibility, With<CraftingPanelPiece>>,
     mut button_query: Query<(&CraftingButton, &ScreenFixed, &mut Sprite)>,
-    mut label_query: Query<&mut TextColor, With<CraftingButtonLabel>>,
+    mut label_query: Query<(&CraftingButtonLabel, &mut TextColor)>,
     mut info_query: Query<&mut Text2d, With<CraftingInfoText>>,
 ) {
     let is_visible = ui_state.active_panel == ActivePanel::Crafting;
@@ -257,13 +286,15 @@ pub(crate) fn sync_crafting_panel(
         };
     }
 
-    let is_ready = matches!(
+    let upgrade_ready = matches!(
         profile.crafting_upgrade_preview(),
         CraftingPreview::Ready { .. }
     );
+    let liquidation_ready = profile.crafting_liquidation_count() > 0;
     let cursor_offset = cursor_offset(&window_query);
 
     for (button, fixed, mut sprite) in &mut button_query {
+        let action_ready = crafting_action_ready(button.action, upgrade_ready, liquidation_ready);
         let hovered = is_visible
             && cursor_offset.is_some_and(|cursor| {
                 let half_size = button.size * 0.5;
@@ -271,9 +302,9 @@ pub(crate) fn sync_crafting_panel(
                     && (cursor.y - fixed.offset.y).abs() <= half_size.y
             });
 
-        sprite.color = if is_ready && hovered {
+        sprite.color = if action_ready && hovered {
             Color::srgba(0.92, 0.50, 0.08, 0.98)
-        } else if is_ready {
+        } else if action_ready {
             Color::srgba(0.56, 0.18, 0.05, 0.98)
         } else if hovered {
             Color::srgba(0.34, 0.19, 0.12, 0.98)
@@ -282,8 +313,8 @@ pub(crate) fn sync_crafting_panel(
         };
     }
 
-    for mut text_color in &mut label_query {
-        text_color.0 = if is_ready {
+    for (label, mut text_color) in &mut label_query {
+        text_color.0 = if crafting_action_ready(label.action, upgrade_ready, liquidation_ready) {
             Color::srgb(0.96, 0.70, 0.32)
         } else {
             Color::srgba(0.64, 0.58, 0.48, 0.78)
@@ -295,25 +326,43 @@ pub(crate) fn sync_crafting_panel(
     }
 }
 
+fn crafting_action_ready(
+    action: CraftingAction,
+    upgrade_ready: bool,
+    liquidation_ready: bool,
+) -> bool {
+    match action {
+        CraftingAction::RarityUpgrade => upgrade_ready,
+        CraftingAction::Liquidate => liquidation_ready,
+    }
+}
+
 fn crafting_status_text(profile: &PlayerProfile, ui_state: &UiState) -> String {
     if !ui_state.crafting_message.is_empty() {
         return ui_state.crafting_message.clone();
     }
 
-    let filled = profile
-        .crafting
-        .iter()
-        .filter(|slot| slot.is_some())
-        .count();
+    let filled = profile.crafting_liquidation_count();
+    let liquidation_value = profile.crafting_liquidation_value();
+    let liquidation_line = if liquidation_value > 0 {
+        format!("\nLiquidate: +{liquidation_value}g")
+    } else {
+        String::new()
+    };
+
     match profile.crafting_upgrade_preview() {
         CraftingPreview::Ready { from, to } => {
-            format!("Ready\n{} -> {}", from.name(), to.name())
+            format!("Ready\n{} -> {}{liquidation_line}", from.name(), to.name())
         }
         CraftingPreview::NeedsItems => {
-            format!("{filled}/{CRAFTING_SLOT_COUNT} items\n5 matching rarity")
+            format!("{filled}/{CRAFTING_SLOT_COUNT} items\n5 matching rarity{liquidation_line}")
         }
-        CraftingPreview::RarityMismatch => "Rarity mismatch\nUse one rarity".to_string(),
-        CraftingPreview::MaxRarity => "Legendary items\nCannot upgrade".to_string(),
+        CraftingPreview::RarityMismatch => {
+            format!("Rarity mismatch\nUse one rarity{liquidation_line}")
+        }
+        CraftingPreview::MaxRarity => {
+            format!("Legendary items\nCannot upgrade{liquidation_line}")
+        }
     }
 }
 
@@ -346,4 +395,8 @@ fn crafting_destination_name(destination: CraftingDestination) -> &'static str {
         CraftingDestination::Cube => "Cube",
         CraftingDestination::Lost => "Lost",
     }
+}
+
+fn item_word(count: usize) -> &'static str {
+    if count == 1 { "item" } else { "items" }
 }

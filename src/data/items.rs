@@ -183,6 +183,17 @@ impl Rarity {
             Rarity::Legendary => 3.2,
         }
     }
+
+    fn value_multiplier(self) -> u32 {
+        match self {
+            Rarity::Common => 1,
+            Rarity::Uncommon => 2,
+            Rarity::Magic => 4,
+            Rarity::Rare => 8,
+            Rarity::Epic => 15,
+            Rarity::Legendary => 28,
+        }
+    }
 }
 
 pub(crate) fn seed_starting_equipment(profile: &mut PlayerProfile, database: &GameDatabase) {
@@ -342,6 +353,13 @@ pub(crate) fn describe_item(item: &ItemInstance, database: &GameDatabase) -> Str
         definition.name,
         item.item_level
     )
+}
+
+pub(crate) fn item_gold_value(item: &ItemInstance) -> u32 {
+    let rarity_multiplier = item.rarity.value_multiplier();
+    let power_value = item.power.max(1).saturating_mul(rarity_multiplier);
+    let level_value = item.item_level.max(1).saturating_mul(rarity_multiplier + 1);
+    power_value.saturating_add(level_value).max(1)
 }
 
 pub(crate) fn item_damage_bonus(item: &ItemInstance, _definition: &ItemDefinition) -> f32 {
