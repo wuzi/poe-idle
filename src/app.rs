@@ -3,21 +3,9 @@ use bevy::prelude::*;
 use crate::components::UiState;
 use crate::constants::{WINDOW_HEIGHT, WINDOW_WIDTH};
 use crate::data::GameDatabase;
-use crate::gameplay::{
-    enemies_attack, handle_map_transitions, move_enemies, move_player, player_attack,
-    regenerate_player_health, resolve_combat_outcomes, spawn_enemy_packs,
-};
-use crate::save::{autosave_game, load_saved_game, save_on_exit};
-use crate::ui::{
-    handle_bottom_buttons, handle_crafting_input, handle_inventory_input, handle_portal_button,
-    handle_talent_panel, sync_character_panel, sync_crafting_panel, sync_dragged_item_visual,
-    sync_hud_text, sync_inventory_grid, sync_inventory_panel, sync_portal_panel, sync_talent_panel,
-    update_item_tooltip,
-};
-use crate::visual::{
-    camera_follow, setup, sync_character_visuals, sync_health_bars, sync_progress_bar,
-    sync_screen_fixed_entities, tick_timed_entities,
-};
+use crate::plugins::GameSystemsPlugin;
+use crate::save::load_saved_game;
+use crate::visual::setup;
 
 pub(crate) fn run() {
     let database = GameDatabase::default();
@@ -46,48 +34,7 @@ pub(crate) fn run() {
             }),
             ..default()
         }))
+        .add_plugins(GameSystemsPlugin)
         .add_systems(Startup, setup)
-        .add_systems(
-            Update,
-            (
-                (
-                    handle_map_transitions,
-                    spawn_enemy_packs,
-                    move_player,
-                    move_enemies,
-                    player_attack,
-                    enemies_attack,
-                    regenerate_player_health,
-                    resolve_combat_outcomes,
-                    tick_timed_entities,
-                    sync_health_bars,
-                    sync_character_visuals,
-                    camera_follow,
-                )
-                    .chain(),
-                (
-                    handle_bottom_buttons,
-                    handle_portal_button,
-                    handle_talent_panel,
-                    sync_portal_panel,
-                    sync_inventory_panel,
-                    handle_inventory_input,
-                    handle_crafting_input,
-                    update_item_tooltip,
-                    sync_character_panel,
-                    sync_crafting_panel,
-                    sync_talent_panel,
-                    sync_dragged_item_visual,
-                    sync_screen_fixed_entities,
-                    sync_progress_bar,
-                    sync_inventory_grid,
-                    sync_hud_text,
-                )
-                    .chain(),
-                autosave_game,
-            )
-                .chain(),
-        )
-        .add_systems(Last, save_on_exit)
         .run();
 }
