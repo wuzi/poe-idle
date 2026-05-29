@@ -93,7 +93,7 @@ pub(crate) fn spawn_enemy_packs(
         for index in 0..pack.count {
             let spawn_x = pack.spawn_x + index as f32 * 54.0;
             let tier_scale =
-                1.0 + (run.atlas_tier - 1) as f32 * 0.16 + map.area_level as f32 * 0.08;
+                1.0 + (run.atlas_tier - 1) as f32 * 0.28 + (map.area_level - 1) as f32 * 0.16;
             let enemy_id = run.next_enemy_id;
             run.next_enemy_id += 1;
             let enemy = spawn_placeholder_actor(

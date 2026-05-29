@@ -91,43 +91,43 @@ impl Default for GameDatabase {
                 MapDefinition {
                     name: "Moss Gate",
                     area_level: 1,
-                    finish_x: 2150.0,
+                    finish_x: 3200.0,
                     background: Color::srgb(0.16, 0.32, 0.29),
                     packs: vec![
                         EnemyPack::new(150.0, EnemyKind::Risen, 2),
-                        EnemyPack::new(430.0, EnemyKind::Risen, 3),
-                        EnemyPack::new(770.0, EnemyKind::CarrionImp, 2),
-                        EnemyPack::new(1120.0, EnemyKind::Risen, 3),
-                        EnemyPack::new(1510.0, EnemyKind::CarrionImp, 3),
-                        EnemyPack::new(1900.0, EnemyKind::MapRare, 1),
+                        EnemyPack::new(620.0, EnemyKind::Risen, 3),
+                        EnemyPack::new(1120.0, EnemyKind::CarrionImp, 2),
+                        EnemyPack::new(1680.0, EnemyKind::Risen, 3),
+                        EnemyPack::new(2250.0, EnemyKind::CarrionImp, 3),
+                        EnemyPack::new(2880.0, EnemyKind::MapRare, 1),
                     ],
                 },
                 MapDefinition {
                     name: "Copper Hollow",
                     area_level: 2,
-                    finish_x: 2450.0,
+                    finish_x: 3600.0,
                     background: Color::srgb(0.29, 0.24, 0.18),
                     packs: vec![
                         EnemyPack::new(160.0, EnemyKind::CarrionImp, 3),
-                        EnemyPack::new(520.0, EnemyKind::Risen, 4),
-                        EnemyPack::new(900.0, EnemyKind::Stonebound, 2),
-                        EnemyPack::new(1290.0, EnemyKind::CarrionImp, 4),
-                        EnemyPack::new(1710.0, EnemyKind::Stonebound, 3),
-                        EnemyPack::new(2180.0, EnemyKind::MapRare, 1),
+                        EnemyPack::new(700.0, EnemyKind::Risen, 4),
+                        EnemyPack::new(1300.0, EnemyKind::Stonebound, 2),
+                        EnemyPack::new(1910.0, EnemyKind::CarrionImp, 4),
+                        EnemyPack::new(2560.0, EnemyKind::Stonebound, 3),
+                        EnemyPack::new(3260.0, EnemyKind::MapRare, 1),
                     ],
                 },
                 MapDefinition {
                     name: "Vaal Orchard",
                     area_level: 3,
-                    finish_x: 2700.0,
+                    finish_x: 4100.0,
                     background: Color::srgb(0.20, 0.23, 0.35),
                     packs: vec![
                         EnemyPack::new(180.0, EnemyKind::Risen, 4),
-                        EnemyPack::new(560.0, EnemyKind::Stonebound, 2),
-                        EnemyPack::new(960.0, EnemyKind::CarrionImp, 4),
-                        EnemyPack::new(1390.0, EnemyKind::Stonebound, 3),
-                        EnemyPack::new(1840.0, EnemyKind::Risen, 5),
-                        EnemyPack::new(2350.0, EnemyKind::MapRare, 1),
+                        EnemyPack::new(760.0, EnemyKind::Stonebound, 2),
+                        EnemyPack::new(1420.0, EnemyKind::CarrionImp, 4),
+                        EnemyPack::new(2120.0, EnemyKind::Stonebound, 3),
+                        EnemyPack::new(2870.0, EnemyKind::Risen, 5),
+                        EnemyPack::new(3700.0, EnemyKind::MapRare, 1),
                     ],
                 },
             ],
@@ -258,14 +258,14 @@ impl EnemyKind {
         match self {
             EnemyKind::Risen => EnemyArchetype {
                 name: "Risen",
-                max_health: 34.0,
-                damage: 5.0,
-                armor: 1.0,
-                attacks_per_second: 0.75,
-                move_speed: 55.0,
+                max_health: 92.0,
+                damage: 13.0,
+                armor: 3.0,
+                attacks_per_second: 0.72,
+                move_speed: 46.0,
                 gold_reward: 8,
-                xp_reward: 16,
-                item_chance: 18.0,
+                xp_reward: 8,
+                item_chance: 10.0,
                 visual: VisualProfile {
                     asset_key: "enemies/risen.png",
                     color: Color::srgb(0.58, 0.62, 0.66),
@@ -274,14 +274,14 @@ impl EnemyKind {
             },
             EnemyKind::CarrionImp => EnemyArchetype {
                 name: "Carrion Imp",
-                max_health: 24.0,
-                damage: 4.0,
-                armor: 0.0,
-                attacks_per_second: 1.12,
-                move_speed: 78.0,
+                max_health: 72.0,
+                damage: 11.0,
+                armor: 1.0,
+                attacks_per_second: 1.05,
+                move_speed: 64.0,
                 gold_reward: 6,
-                xp_reward: 14,
-                item_chance: 16.0,
+                xp_reward: 7,
+                item_chance: 9.0,
                 visual: VisualProfile {
                     asset_key: "enemies/carrion_imp.png",
                     color: Color::srgb(0.78, 0.35, 0.34),
@@ -290,14 +290,14 @@ impl EnemyKind {
             },
             EnemyKind::Stonebound => EnemyArchetype {
                 name: "Stonebound",
-                max_health: 58.0,
-                damage: 8.0,
-                armor: 5.0,
-                attacks_per_second: 0.55,
-                move_speed: 42.0,
+                max_health: 155.0,
+                damage: 20.0,
+                armor: 10.0,
+                attacks_per_second: 0.58,
+                move_speed: 38.0,
                 gold_reward: 13,
-                xp_reward: 24,
-                item_chance: 24.0,
+                xp_reward: 12,
+                item_chance: 14.0,
                 visual: VisualProfile {
                     asset_key: "enemies/stonebound.png",
                     color: Color::srgb(0.46, 0.42, 0.36),
@@ -306,14 +306,14 @@ impl EnemyKind {
             },
             EnemyKind::MapRare => EnemyArchetype {
                 name: "Map Rare",
-                max_health: 128.0,
-                damage: 12.0,
-                armor: 6.0,
-                attacks_per_second: 0.72,
-                move_speed: 48.0,
+                max_health: 360.0,
+                damage: 30.0,
+                armor: 14.0,
+                attacks_per_second: 0.68,
+                move_speed: 42.0,
                 gold_reward: 38,
-                xp_reward: 72,
-                item_chance: 78.0,
+                xp_reward: 38,
+                item_chance: 48.0,
                 visual: VisualProfile {
                     asset_key: "enemies/map_rare.png",
                     color: Color::srgb(0.86, 0.62, 0.22),
@@ -507,15 +507,15 @@ impl PlayerProfile {
             let definition = &database.items[item.def_id];
             let power = item.power as f32;
             match definition.slot {
-                ItemSlot::Weapon => item_damage += power * 1.4,
-                ItemSlot::Shield => item_armor += power * 1.2,
+                ItemSlot::Weapon => item_damage += power * 0.9,
+                ItemSlot::Shield => item_armor += power * 0.65,
                 ItemSlot::Armor => {
-                    item_armor += power * 1.7;
-                    item_health += power * 2.5;
+                    item_armor += power * 1.1;
+                    item_health += power * 1.8;
                 }
                 ItemSlot::Trinket => {
-                    item_damage += power * 0.45;
-                    item_health += power * 1.2;
+                    item_damage += power * 0.3;
+                    item_health += power * 0.9;
                 }
             }
         }
@@ -540,20 +540,20 @@ impl PlayerProfile {
             }
         }
 
-        let max_health = (78.0
-            + attributes.vitality as f32 * 9.0
-            + attributes.strength as f32 * 2.4
+        let max_health = (65.0
+            + attributes.vitality as f32 * 5.8
+            + attributes.strength as f32 * 1.4
             + item_health)
             * health_multiplier;
         let damage = (class.base_damage
-            + attributes.strength as f32 * 1.15
-            + attributes.dexterity as f32 * 0.55
-            + attributes.intelligence as f32 * 0.35
+            + attributes.strength as f32 * 0.55
+            + attributes.dexterity as f32 * 0.25
+            + attributes.intelligence as f32 * 0.18
             + item_damage)
             * damage_multiplier;
-        let armor = class.base_armor + attributes.strength as f32 * 0.62 + item_armor;
+        let armor = class.base_armor + attributes.strength as f32 * 0.30 + item_armor;
         let attacks_per_second =
-            (class.attacks_per_second + attributes.dexterity as f32 * 0.012).clamp(0.45, 2.2);
+            (class.attacks_per_second + attributes.dexterity as f32 * 0.006).clamp(0.45, 1.8);
 
         DerivedStats {
             max_health,
@@ -565,7 +565,7 @@ impl PlayerProfile {
     }
 
     pub(crate) fn xp_to_next_level(&self) -> u32 {
-        90 + self.level * 45
+        260 + self.level.pow(2) * 95
     }
 
     pub(crate) fn gain_xp(&mut self, xp: u32, database: &GameDatabase) -> bool {
@@ -870,8 +870,8 @@ pub(crate) fn describe_item(item: &ItemInstance, database: &GameDatabase) -> Str
 pub(crate) fn item_damage_bonus(item: &ItemInstance, definition: &ItemDefinition) -> f32 {
     let power = item.power as f32;
     match definition.slot {
-        ItemSlot::Weapon => power * 1.4,
-        ItemSlot::Trinket => power * 0.45,
+        ItemSlot::Weapon => power * 0.9,
+        ItemSlot::Trinket => power * 0.3,
         ItemSlot::Shield | ItemSlot::Armor => 0.0,
     }
 }
@@ -879,8 +879,8 @@ pub(crate) fn item_damage_bonus(item: &ItemInstance, definition: &ItemDefinition
 pub(crate) fn item_armor_bonus(item: &ItemInstance, definition: &ItemDefinition) -> f32 {
     let power = item.power as f32;
     match definition.slot {
-        ItemSlot::Shield => power * 1.2,
-        ItemSlot::Armor => power * 1.7,
+        ItemSlot::Shield => power * 0.65,
+        ItemSlot::Armor => power * 1.1,
         ItemSlot::Weapon | ItemSlot::Trinket => 0.0,
     }
 }
@@ -888,8 +888,8 @@ pub(crate) fn item_armor_bonus(item: &ItemInstance, definition: &ItemDefinition)
 pub(crate) fn item_life_bonus(item: &ItemInstance, definition: &ItemDefinition) -> f32 {
     let power = item.power as f32;
     match definition.slot {
-        ItemSlot::Armor => power * 2.5,
-        ItemSlot::Trinket => power * 1.2,
+        ItemSlot::Armor => power * 1.8,
+        ItemSlot::Trinket => power * 0.9,
         ItemSlot::Weapon | ItemSlot::Shield => 0.0,
     }
 }
@@ -920,5 +920,5 @@ pub(crate) fn rarity_color(rarity: Rarity) -> Color {
 }
 
 pub(crate) fn damage_after_armor(raw_damage: f32, armor: f32) -> f32 {
-    (raw_damage - armor * 0.28).max(1.0)
+    (raw_damage - armor * 0.16).max(1.0)
 }
