@@ -8,5 +8,11 @@ bevy = { version = "0.18.1", default-features = false, features = [
   "bevy_winit",
   "bevy_render",
   "bevy_core_pipeline",
+  "bevy_sprite",
+  "bevy_sprite_render",
+  "bevy_text",
+  "bevy_ui",
+  "bevy_ui_render",
+  "default_font",
   "x11",
 ] }
