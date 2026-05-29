@@ -3,8 +3,8 @@ use bevy::sprite::Anchor;
 
 use crate::components::{
     ActivePanel, BottomButton, BottomButtonLabel, CharacterPanelPiece, CharacterPanelText, Health,
-    HudText, InventoryCell, InventorySource, ItemTooltipBackground, ItemTooltipText, Player,
-    ProgressBarFill, ScreenFixed, UiState,
+    HudText, InventoryCell, InventoryPanelPiece, InventorySource, ItemTooltipBackground,
+    ItemTooltipText, Player, ProgressBarFill, ScreenFixed, UiState,
 };
 use crate::constants::{
     BOTTOM_BUTTON_SIZE, INVENTORY_CELL_SIZE, TOOLTIP_PADDING, TOOLTIP_WIDTH, WINDOW_HEIGHT,
@@ -29,7 +29,7 @@ pub(crate) fn spawn_screen_layout(commands: &mut Commands) {
         Vec2::new(668.0, 34.0),
         Color::srgba(0.25, 0.13, 0.08, 0.92),
     );
-    spawn_fixed_rect(
+    spawn_inventory_panel_rect(
         commands,
         Vec3::new(0.0, -342.0, 30.0),
         Vec2::new(668.0, 242.0),
@@ -70,9 +70,9 @@ pub(crate) fn spawn_screen_layout(commands: &mut Commands) {
         16.0,
     );
 
-    spawn_fixed_label(commands, "Inventory", Vec3::new(-290.0, -236.0, 35.0), 17.0);
-    spawn_fixed_label(commands, "Stash", Vec3::new(60.0, -236.0, 35.0), 17.0);
-    spawn_fixed_label(commands, "Equipped", Vec3::new(60.0, -382.0, 35.0), 15.0);
+    spawn_inventory_panel_label(commands, "Inventory", Vec3::new(-290.0, -236.0, 35.0), 17.0);
+    spawn_inventory_panel_label(commands, "Stash", Vec3::new(60.0, -236.0, 35.0), 17.0);
+    spawn_inventory_panel_label(commands, "Equipped", Vec3::new(60.0, -382.0, 35.0), 15.0);
 
     spawn_inventory_cells(
         commands,
@@ -132,8 +132,10 @@ fn spawn_inventory_cells(
                     Vec2::splat(INVENTORY_CELL_SIZE),
                 ),
                 Transform::from_translation(offset),
+                Visibility::Visible,
                 ScreenFixed { offset },
                 InventoryCell { source, index },
+                InventoryPanelPiece,
             ));
         }
     }
@@ -144,6 +146,16 @@ fn spawn_fixed_rect(commands: &mut Commands, offset: Vec3, size: Vec2, color: Co
         Sprite::from_color(color, size),
         Transform::from_translation(offset),
         ScreenFixed { offset },
+    ));
+}
+
+fn spawn_inventory_panel_rect(commands: &mut Commands, offset: Vec3, size: Vec2, color: Color) {
+    commands.spawn((
+        Sprite::from_color(color, size),
+        Transform::from_translation(offset),
+        Visibility::Visible,
+        ScreenFixed { offset },
+        InventoryPanelPiece,
     ));
 }
 
@@ -163,7 +175,12 @@ fn spawn_fixed_text(commands: &mut Commands, kind: HudText, offset: Vec3, font_s
     ));
 }
 
-fn spawn_fixed_label(commands: &mut Commands, label: &'static str, offset: Vec3, font_size: f32) {
+fn spawn_inventory_panel_label(
+    commands: &mut Commands,
+    label: &'static str,
+    offset: Vec3,
+    font_size: f32,
+) {
     commands.spawn((
         Text2d::new(label),
         TextFont {
@@ -174,7 +191,9 @@ fn spawn_fixed_label(commands: &mut Commands, label: &'static str, offset: Vec3,
         TextLayout::new_with_justify(Justify::Left),
         Anchor::TOP_LEFT,
         Transform::from_translation(offset),
+        Visibility::Visible,
         ScreenFixed { offset },
+        InventoryPanelPiece,
     ));
 }
 
@@ -383,7 +402,11 @@ pub(crate) fn handle_bottom_buttons(
         });
 
         if hovered && mouse.just_pressed(MouseButton::Left) {
-            next_panel = button.panel;
+            next_panel = if ui_state.active_panel == button.panel {
+                ActivePanel::None
+            } else {
+                button.panel
+            };
         }
 
         let active = next_panel == button.panel;
@@ -403,6 +426,20 @@ pub(crate) fn handle_bottom_buttons(
             Color::srgb(1.0, 0.82, 0.42)
         } else {
             Color::srgb(0.96, 0.70, 0.32)
+        };
+    }
+}
+
+pub(crate) fn sync_inventory_panel(
+    ui_state: Res<UiState>,
+    mut visibility_query: Query<&mut Visibility, With<InventoryPanelPiece>>,
+) {
+    let is_visible = ui_state.active_panel == ActivePanel::Inventory;
+    for mut visibility in &mut visibility_query {
+        *visibility = if is_visible {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
         };
     }
 }
@@ -474,6 +511,7 @@ pub(crate) fn sync_character_panel(
 pub(crate) fn update_item_tooltip(
     database: Res<GameDatabase>,
     profile: Res<PlayerProfile>,
+    ui_state: Res<UiState>,
     window_query: Query<&Window>,
     cell_query: Query<
         (&InventoryCell, &ScreenFixed),
@@ -503,6 +541,12 @@ pub(crate) fn update_item_tooltip(
     else {
         return;
     };
+
+    if ui_state.active_panel != ActivePanel::Inventory {
+        *background_visibility = Visibility::Hidden;
+        *text_visibility = Visibility::Hidden;
+        return;
+    }
 
     let Ok(window) = window_query.single() else {
         *background_visibility = Visibility::Hidden;

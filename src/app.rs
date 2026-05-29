@@ -9,7 +9,7 @@ use crate::gameplay::{
 };
 use crate::ui::{
     handle_bottom_buttons, sync_character_panel, sync_hud_text, sync_inventory_grid,
-    update_item_tooltip,
+    sync_inventory_panel, update_item_tooltip,
 };
 use crate::visual::{
     camera_follow, setup, sync_character_visuals, sync_health_bars, sync_progress_bar,
@@ -49,6 +49,7 @@ pub(crate) fn run() {
                 sync_character_visuals,
                 camera_follow,
                 handle_bottom_buttons,
+                sync_inventory_panel,
                 update_item_tooltip,
                 sync_character_panel,
                 sync_screen_fixed_entities,

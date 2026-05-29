@@ -8,13 +8,14 @@ pub(crate) struct UiState {
 impl Default for UiState {
     fn default() -> Self {
         Self {
-            active_panel: ActivePanel::Inventory,
+            active_panel: ActivePanel::None,
         }
     }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ActivePanel {
+    None,
     Inventory,
     Character,
 }
@@ -82,6 +83,9 @@ pub(crate) struct BottomButtonLabel {
 
 #[derive(Component)]
 pub(crate) struct CharacterPanelPiece;
+
+#[derive(Component)]
+pub(crate) struct InventoryPanelPiece;
 
 #[derive(Component)]
 pub(crate) enum CharacterPanelText {
