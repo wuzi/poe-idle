@@ -1,0 +1,12 @@
+[package]
+name = "poe-idle"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bevy = { version = "0.18.1", default-features = false, features = [
+  "bevy_winit",
+  "bevy_render",
+  "bevy_core_pipeline",
+  "x11",
+] }
