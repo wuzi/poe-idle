@@ -18,10 +18,10 @@ impl Default for GameDatabase {
                     id: ClassId::Knight,
                     name: "Knight",
                     base_attributes: Attributes {
-                        strength: 13,
-                        dexterity: 8,
+                        strength: 14,
+                        dexterity: 10,
                         intelligence: 5,
-                        vitality: 12,
+                        vitality: 13,
                     },
                     growth: Attributes {
                         strength: 3,
@@ -29,9 +29,9 @@ impl Default for GameDatabase {
                         intelligence: 1,
                         vitality: 3,
                     },
-                    base_damage: 8.0,
-                    base_armor: 8.0,
-                    attacks_per_second: 0.92,
+                    base_damage: 10.0,
+                    base_armor: 9.0,
+                    attacks_per_second: 0.98,
                     visual: VisualProfile {
                         asset_key: "characters/knight.png",
                         color: Color::srgb(0.56, 0.63, 0.68),
@@ -43,9 +43,9 @@ impl Default for GameDatabase {
                     name: "Ranger",
                     base_attributes: Attributes {
                         strength: 8,
-                        dexterity: 14,
+                        dexterity: 16,
                         intelligence: 7,
-                        vitality: 9,
+                        vitality: 10,
                     },
                     growth: Attributes {
                         strength: 1,
@@ -53,9 +53,9 @@ impl Default for GameDatabase {
                         intelligence: 1,
                         vitality: 2,
                     },
-                    base_damage: 7.0,
-                    base_armor: 4.0,
-                    attacks_per_second: 1.18,
+                    base_damage: 8.5,
+                    base_armor: 5.0,
+                    attacks_per_second: 1.24,
                     visual: VisualProfile {
                         asset_key: "characters/ranger.png",
                         color: Color::srgb(0.43, 0.72, 0.42),
@@ -68,8 +68,8 @@ impl Default for GameDatabase {
                     base_attributes: Attributes {
                         strength: 5,
                         dexterity: 7,
-                        intelligence: 15,
-                        vitality: 8,
+                        intelligence: 17,
+                        vitality: 9,
                     },
                     growth: Attributes {
                         strength: 1,
@@ -77,9 +77,9 @@ impl Default for GameDatabase {
                         intelligence: 4,
                         vitality: 2,
                     },
-                    base_damage: 9.0,
-                    base_armor: 2.0,
-                    attacks_per_second: 0.98,
+                    base_damage: 10.5,
+                    base_armor: 3.0,
+                    attacks_per_second: 1.03,
                     visual: VisualProfile {
                         asset_key: "characters/acolyte.png",
                         color: Color::srgb(0.55, 0.50, 0.86),
