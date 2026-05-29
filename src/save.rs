@@ -116,13 +116,21 @@ pub(crate) fn load_saved_game(database: &GameDatabase) -> LoadedGame {
 
     let mut profile = save.profile;
     repair_profile_after_load(&mut profile, database);
+    if save.run.atlas_tier > 1 {
+        profile.highest_unlocked_map_index = database.maps.len().saturating_sub(1);
+    } else {
+        profile.highest_unlocked_map_index = profile
+            .highest_unlocked_map_index
+            .max(save.run.map_index)
+            .min(database.maps.len().saturating_sub(1));
+    }
 
     let mut run = RunState::default();
     run.map_index = save
         .run
         .map_index
-        .min(database.maps.len().saturating_sub(1));
-    run.atlas_tier = save.run.atlas_tier.max(1);
+        .min(profile.highest_unlocked_map_index(database));
+    run.atlas_tier = 1;
 
     LoadedGame {
         profile,
@@ -217,6 +225,9 @@ fn repair_profile_after_load(profile: &mut PlayerProfile, database: &GameDatabas
     profile.stash.resize(STASH_SIZE, None);
     profile.crafting.resize(CRAFTING_SLOT_COUNT, None);
     profile.equipment.resize(EQUIPMENT_SLOT_COUNT, None);
+    profile.highest_unlocked_map_index = profile
+        .highest_unlocked_map_index
+        .min(database.maps.len().saturating_sub(1));
 
     remove_invalid_items(&mut profile.inventory, database);
     remove_invalid_items(&mut profile.stash, database);
@@ -347,6 +358,7 @@ impl ProfileSaveClone for PlayerProfile {
             stash: self.stash.clone(),
             crafting: self.crafting.clone(),
             equipment: self.equipment.clone(),
+            highest_unlocked_map_index: self.highest_unlocked_map_index,
             respawns: self.respawns,
             starter_items_seeded: self.starter_items_seeded,
         }

@@ -93,50 +93,7 @@ impl Default for GameDatabase {
                     talents: acolyte_talents(),
                 },
             ],
-            maps: vec![
-                MapDefinition {
-                    name: "Moss Gate",
-                    area_level: 1,
-                    finish_x: 2550.0,
-                    background: Color::srgb(0.16, 0.32, 0.29),
-                    packs: vec![
-                        EnemyPack::new(150.0, EnemyKind::Risen, 1),
-                        EnemyPack::new(460.0, EnemyKind::Risen, 2),
-                        EnemyPack::new(820.0, EnemyKind::CarrionImp, 2),
-                        EnemyPack::new(1210.0, EnemyKind::Risen, 2),
-                        EnemyPack::new(1650.0, EnemyKind::CarrionImp, 2),
-                        EnemyPack::new(2120.0, EnemyKind::MapRare, 1),
-                    ],
-                },
-                MapDefinition {
-                    name: "Copper Hollow",
-                    area_level: 2,
-                    finish_x: 3600.0,
-                    background: Color::srgb(0.29, 0.24, 0.18),
-                    packs: vec![
-                        EnemyPack::new(160.0, EnemyKind::CarrionImp, 3),
-                        EnemyPack::new(700.0, EnemyKind::Risen, 4),
-                        EnemyPack::new(1300.0, EnemyKind::Stonebound, 2),
-                        EnemyPack::new(1910.0, EnemyKind::CarrionImp, 4),
-                        EnemyPack::new(2560.0, EnemyKind::Stonebound, 3),
-                        EnemyPack::new(3260.0, EnemyKind::MapRare, 1),
-                    ],
-                },
-                MapDefinition {
-                    name: "Vaal Orchard",
-                    area_level: 3,
-                    finish_x: 4100.0,
-                    background: Color::srgb(0.20, 0.23, 0.35),
-                    packs: vec![
-                        EnemyPack::new(180.0, EnemyKind::Risen, 4),
-                        EnemyPack::new(760.0, EnemyKind::Stonebound, 2),
-                        EnemyPack::new(1420.0, EnemyKind::CarrionImp, 4),
-                        EnemyPack::new(2120.0, EnemyKind::Stonebound, 3),
-                        EnemyPack::new(2870.0, EnemyKind::Risen, 5),
-                        EnemyPack::new(3700.0, EnemyKind::MapRare, 1),
-                    ],
-                },
-            ],
+            maps: build_map_progression(),
             items: vec![
                 ItemDefinition {
                     name: "Iron Splitter",
@@ -267,6 +224,117 @@ impl Default for GameDatabase {
     }
 }
 
+fn build_map_progression() -> Vec<MapDefinition> {
+    const MAP_NAMES: [&str; 50] = [
+        "Moss Gate",
+        "Copper Hollow",
+        "Vaal Orchard",
+        "Ashen Causeway",
+        "Glimmering Fen",
+        "Sable Quarry",
+        "Frostpine Watch",
+        "Rusted Aqueduct",
+        "Sunken Reliquary",
+        "Emberfall Rise",
+        "Graveglass Marsh",
+        "Ivory Bastion",
+        "Witchlight Thicket",
+        "Crimson Foundry",
+        "Saltwind Cliffs",
+        "Moonlit Barrows",
+        "Shattered Viaduct",
+        "Obsidian Steppe",
+        "Hollow Menagerie",
+        "Stormbreak Strand",
+        "Dreadroot Grove",
+        "Gilded Ossuary",
+        "Nightfall Terrace",
+        "Cinder Monastery",
+        "Bitterglass Tundra",
+        "Bloodpetal Garden",
+        "Forgotten Reservoir",
+        "Thornwound Pass",
+        "Marrowdeep Mine",
+        "Starless Archives",
+        "Duskvein Crossing",
+        "Searing Basilica",
+        "Rotcrown Mire",
+        "Ironspine Rampart",
+        "Whispering Necropolis",
+        "Tempest Crucible",
+        "Pale Serpent Road",
+        "Sunfire Caldera",
+        "Ebonwater Docks",
+        "Mirrorbone Sanctum",
+        "Wraithglass Citadel",
+        "Howling Crown",
+        "Feverdream Palace",
+        "Blackstar Labyrinth",
+        "Doomroot Expanse",
+        "Celestial Furnace",
+        "Voidscar Summit",
+        "Ravaged Atlas",
+        "Eternal Threshold",
+        "Apex of Hunger",
+    ];
+
+    MAP_NAMES
+        .iter()
+        .enumerate()
+        .map(|(index, name)| {
+            let area_level = index as u32 + 1;
+            let finish_x = 2450.0 + index as f32 * 135.0;
+            MapDefinition {
+                name,
+                area_level,
+                finish_x,
+                background: map_background(index),
+                packs: map_packs(index, finish_x),
+            }
+        })
+        .collect()
+}
+
+fn map_background(index: usize) -> Color {
+    match index % 10 {
+        0 => Color::srgb(0.16, 0.32, 0.29),
+        1 => Color::srgb(0.29, 0.24, 0.18),
+        2 => Color::srgb(0.20, 0.23, 0.35),
+        3 => Color::srgb(0.32, 0.18, 0.14),
+        4 => Color::srgb(0.18, 0.28, 0.22),
+        5 => Color::srgb(0.23, 0.21, 0.25),
+        6 => Color::srgb(0.18, 0.26, 0.33),
+        7 => Color::srgb(0.30, 0.25, 0.20),
+        8 => Color::srgb(0.24, 0.18, 0.27),
+        _ => Color::srgb(0.28, 0.17, 0.12),
+    }
+}
+
+fn map_packs(index: usize, finish_x: f32) -> Vec<EnemyPack> {
+    let pack_count = 5 + (index / 7).min(3);
+    let last_pack_x = (finish_x - 360.0).max(900.0);
+    let spacing = (last_pack_x - 180.0) / pack_count as f32;
+    let mut packs = Vec::with_capacity(pack_count + 1);
+
+    for pack_index in 0..pack_count {
+        let kind = match (index + pack_index) % 4 {
+            0 => EnemyKind::Risen,
+            1 => EnemyKind::CarrionImp,
+            2 => EnemyKind::Stonebound,
+            _ => EnemyKind::Risen,
+        };
+        let count = 1 + (index / 6).min(4) + (pack_index % 3);
+        packs.push(EnemyPack::new(
+            180.0 + spacing * pack_index as f32,
+            kind,
+            count,
+        ));
+    }
+
+    packs.push(EnemyPack::new(last_pack_x, EnemyKind::MapRare, 1));
+    packs
+}
+
 #[derive(Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) enum ClassId {
     #[default]
@@ -298,6 +366,10 @@ pub(crate) struct MapDefinition {
 }
 
 impl MapDefinition {
+    pub(crate) fn recommended_enemy_level(&self) -> u32 {
+        self.area_level
+    }
+
     pub(crate) fn total_enemies(&self) -> usize {
         self.packs.iter().map(|pack| pack.count).sum()
     }

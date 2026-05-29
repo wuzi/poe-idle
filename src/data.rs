@@ -48,6 +48,7 @@ pub(crate) struct PlayerProfile {
     pub(crate) stash: Vec<Option<ItemInstance>>,
     pub(crate) crafting: Vec<Option<ItemInstance>>,
     pub(crate) equipment: Vec<Option<ItemInstance>>,
+    pub(crate) highest_unlocked_map_index: usize,
     pub(crate) respawns: u32,
     pub(crate) starter_items_seeded: bool,
 }
@@ -64,6 +65,7 @@ impl Default for PlayerProfile {
             stash: vec![None; STASH_SIZE],
             crafting: vec![None; CRAFTING_SLOT_COUNT],
             equipment: vec![None; EQUIPMENT_SLOT_COUNT],
+            highest_unlocked_map_index: 0,
             respawns: 0,
             starter_items_seeded: false,
         }
@@ -289,6 +291,31 @@ impl PlayerProfile {
         }
 
         ItemDestination::Lost
+    }
+
+    pub(crate) fn highest_unlocked_map_index(&self, database: &GameDatabase) -> usize {
+        self.highest_unlocked_map_index
+            .min(database.maps.len().saturating_sub(1))
+    }
+
+    pub(crate) fn map_unlocked(&self, database: &GameDatabase, map_index: usize) -> bool {
+        map_index <= self.highest_unlocked_map_index(database)
+    }
+
+    pub(crate) fn unlock_next_map(
+        &mut self,
+        database: &GameDatabase,
+        cleared_map_index: usize,
+    ) -> Option<usize> {
+        let next_map_index = cleared_map_index + 1;
+        if next_map_index >= database.maps.len()
+            || next_map_index <= self.highest_unlocked_map_index(database)
+        {
+            return None;
+        }
+
+        self.highest_unlocked_map_index = next_map_index;
+        Some(next_map_index)
     }
 
     pub(crate) fn item_at(&self, location: ItemLocation) -> Option<&ItemInstance> {

@@ -14,8 +14,9 @@ use crate::components::{
     ActivePanel, BottomButton, BottomButtonLabel, CharacterPanelPiece, CharacterPanelText,
     CraftingPanelPiece, DraggedItem, DraggedItemVisual, EquippedTooltipBackground,
     EquippedTooltipText, Health, HudText, InventoryCell, InventoryCellLabel, InventoryPanelPiece,
-    InventorySource, ItemTooltipBackground, ItemTooltipText, Player, PortalPanelPiece,
-    PortalToggleButton, PortalToggleButtonLabel, ProgressBarFill, ScreenFixed, UiState,
+    InventorySource, ItemTooltipBackground, ItemTooltipText, Player, PortalMapButton,
+    PortalMapButtonLabel, PortalPanelPiece, PortalToggleButton, PortalToggleButtonLabel,
+    ProgressBarFill, ScreenFixed, UiState,
 };
 use crate::constants::{
     BOTTOM_BUTTON_SIZE, INVENTORY_CELL_SIZE, MAP_PROGRESS_LEFT, MAP_PROGRESS_WIDTH, MAP_PROGRESS_Y,
@@ -25,6 +26,9 @@ use crate::constants::{
 const TOOLTIP_LINE_HEIGHT: f32 = 17.0;
 const TOOLTIP_GAP: f32 = 10.0;
 const TOOLTIP_WRAP_CHARS: usize = 32;
+const PORTAL_ROUTE_VISIBLE_COUNT: usize = 7;
+const PORTAL_ROUTE_TOP_Y: f32 = 112.0;
+const PORTAL_ROUTE_STEP_Y: f32 = 34.0;
 use crate::data::{
     GameDatabase, ItemInstance, ItemLocation, ItemSlot, PlayerProfile, Rarity, RunState, RunStatus,
     TalentNode, item_armor_bonus, item_attack_speed_bonus, item_crit_chance_bonus,
@@ -32,7 +36,11 @@ use crate::data::{
     item_life_bonus, item_move_speed_bonus, item_slot_effect, rarity_color, rarity_effect,
 };
 
-pub(crate) fn spawn_screen_layout(commands: &mut Commands, talents: &[TalentNode]) {
+pub(crate) fn spawn_screen_layout(
+    commands: &mut Commands,
+    talents: &[TalentNode],
+    map_count: usize,
+) {
     spawn_fixed_rect(
         commands,
         Vec3::new(0.0, 368.0, 31.0),
@@ -111,6 +119,7 @@ pub(crate) fn spawn_screen_layout(commands: &mut Commands, talents: &[TalentNode
         Vec3::new(270.0, 212.0, 35.0),
         13.0,
     );
+    spawn_portal_map_route(commands, map_count);
 
     spawn_inventory_panel_frame(commands, Vec3::new(-394.0, 112.0, 30.0), "STASH");
     spawn_inventory_panel_frame(commands, Vec3::new(0.0, 112.0, 30.0), "HERO");
@@ -387,6 +396,52 @@ fn spawn_portal_text(commands: &mut Commands, kind: HudText, offset: Vec3, font_
         ScreenFixed { offset },
         PortalPanelPiece,
         kind,
+    ));
+}
+
+fn spawn_portal_map_route(commands: &mut Commands, map_count: usize) {
+    for map_index in 0..map_count {
+        let center = portal_route_card_offset(map_index);
+        spawn_portal_map_button(commands, map_index, center);
+    }
+}
+
+fn portal_route_card_offset(slot_index: usize) -> Vec3 {
+    Vec3::new(
+        394.0,
+        PORTAL_ROUTE_TOP_Y - slot_index as f32 * PORTAL_ROUTE_STEP_Y,
+        36.0,
+    )
+}
+
+fn spawn_portal_map_button(commands: &mut Commands, map_index: usize, offset: Vec3) {
+    let size = Vec2::new(246.0, 28.0);
+    commands.spawn((
+        Sprite::from_color(Color::srgba(0.28, 0.18, 0.09, 0.95), size),
+        Transform::from_translation(offset),
+        Visibility::Visible,
+        ScreenFixed { offset },
+        PortalPanelPiece,
+        PortalMapButton { map_index, size },
+    ));
+
+    let text_offset = offset + Vec3::new(0.0, 7.0, 1.0);
+    commands.spawn((
+        Text2d::new(""),
+        TextFont {
+            font_size: 8.8,
+            ..default()
+        },
+        TextColor(Color::srgb(0.10, 0.07, 0.04)),
+        TextLayout::new_with_justify(Justify::Center),
+        Anchor::CENTER,
+        Transform::from_translation(text_offset),
+        Visibility::Visible,
+        ScreenFixed {
+            offset: text_offset,
+        },
+        PortalPanelPiece,
+        PortalMapButtonLabel { map_index },
     ));
 }
 
@@ -781,9 +836,16 @@ pub(crate) fn handle_bottom_buttons(
 
 pub(crate) fn handle_portal_button(
     mut ui_state: ResMut<UiState>,
+    database: Res<GameDatabase>,
+    profile: Res<PlayerProfile>,
+    run: Res<RunState>,
     mouse: Res<ButtonInput<MouseButton>>,
     window_query: Query<&Window>,
-    mut button_query: Query<(&PortalToggleButton, &ScreenFixed, &mut Sprite)>,
+    mut button_query: Query<
+        (&PortalToggleButton, &ScreenFixed, &mut Sprite),
+        Without<PortalMapButton>,
+    >,
+    map_button_query: Query<(&PortalMapButton, &ScreenFixed), Without<PortalToggleButton>>,
     mut label_query: Query<&mut TextColor, With<PortalToggleButtonLabel>>,
 ) {
     let cursor_offset = cursor_offset(&window_query);
@@ -815,6 +877,29 @@ pub(crate) fn handle_portal_button(
             Color::srgb(0.96, 0.70, 0.32)
         };
     }
+
+    if !ui_state.portal_visible || !mouse.just_pressed(MouseButton::Left) {
+        return;
+    }
+
+    let Some(cursor_offset) = cursor_offset else {
+        return;
+    };
+
+    let visible_range = portal_visible_map_range(run.map_index, database.maps.len());
+
+    for (button, fixed) in &map_button_query {
+        if !visible_range.contains(&button.map_index) {
+            continue;
+        }
+        let half_size = button.size * 0.5;
+        let hovered = (cursor_offset.x - fixed.offset.x).abs() <= half_size.x
+            && (cursor_offset.y - fixed.offset.y).abs() <= half_size.y;
+        if hovered && profile.map_unlocked(&database, button.map_index) {
+            ui_state.requested_map_index = Some(button.map_index);
+            break;
+        }
+    }
 }
 
 pub(crate) fn sync_portal_panel(
@@ -828,6 +913,132 @@ pub(crate) fn sync_portal_panel(
             Visibility::Hidden
         };
     }
+}
+
+pub(crate) fn sync_portal_map_buttons(
+    database: Res<GameDatabase>,
+    profile: Res<PlayerProfile>,
+    run: Res<RunState>,
+    ui_state: Res<UiState>,
+    window_query: Query<&Window>,
+    mut button_query: Query<
+        (
+            &PortalMapButton,
+            &mut ScreenFixed,
+            &mut Visibility,
+            &mut Sprite,
+        ),
+        Without<PortalMapButtonLabel>,
+    >,
+    mut label_query: Query<
+        (
+            &PortalMapButtonLabel,
+            &mut ScreenFixed,
+            &mut Visibility,
+            &mut Text2d,
+            &mut TextColor,
+        ),
+        Without<PortalMapButton>,
+    >,
+) {
+    let cursor_offset = cursor_offset(&window_query);
+    let highest_unlocked = profile.highest_unlocked_map_index(&database);
+    let visible_range = portal_visible_map_range(run.map_index, database.maps.len());
+
+    for (button, mut fixed, mut visibility, mut sprite) in &mut button_query {
+        if !visible_range.contains(&button.map_index) || !ui_state.portal_visible {
+            *visibility = Visibility::Hidden;
+            continue;
+        }
+
+        let mut offset = portal_route_card_offset(button.map_index - visible_range.start);
+        offset.z = fixed.offset.z;
+        fixed.offset = offset;
+        *visibility = Visibility::Visible;
+
+        let unlocked = profile.map_unlocked(&database, button.map_index);
+        let current = run.map_index == button.map_index;
+        let conquered = button.map_index < highest_unlocked;
+        let hovered = unlocked
+            && cursor_offset.is_some_and(|cursor| {
+                let half_size = button.size * 0.5;
+                (cursor.x - fixed.offset.x).abs() <= half_size.x
+                    && (cursor.y - fixed.offset.y).abs() <= half_size.y
+            });
+
+        sprite.color = if current && hovered {
+            Color::srgba(0.94, 0.58, 0.10, 0.98)
+        } else if current {
+            Color::srgba(0.78, 0.38, 0.08, 0.98)
+        } else if conquered && hovered {
+            Color::srgba(0.46, 0.55, 0.22, 0.98)
+        } else if conquered {
+            Color::srgba(0.28, 0.40, 0.18, 0.96)
+        } else if unlocked && hovered {
+            Color::srgba(0.68, 0.42, 0.12, 0.98)
+        } else if unlocked {
+            Color::srgba(0.42, 0.27, 0.10, 0.96)
+        } else {
+            Color::srgba(0.12, 0.10, 0.09, 0.88)
+        };
+    }
+
+    for (label, mut fixed, mut visibility, mut text, mut text_color) in &mut label_query {
+        if !visible_range.contains(&label.map_index) || !ui_state.portal_visible {
+            *visibility = Visibility::Hidden;
+            continue;
+        }
+
+        let mut offset = portal_route_card_offset(label.map_index - visible_range.start)
+            + Vec3::new(0.0, 5.0, 1.0);
+        offset.z = fixed.offset.z;
+        fixed.offset = offset;
+        *visibility = Visibility::Visible;
+
+        let Some(map) = database.maps.get(label.map_index) else {
+            continue;
+        };
+        let unlocked = profile.map_unlocked(&database, label.map_index);
+        let current = run.map_index == label.map_index;
+        let state = if current {
+            "CURRENT"
+        } else if label.map_index < highest_unlocked {
+            "CLEARED"
+        } else if unlocked {
+            "AVAILABLE"
+        } else {
+            "LOCKED"
+        };
+
+        text.0 = format!(
+            "{}. {}\nEnemy Lv {}   {}",
+            label.map_index + 1,
+            map.name,
+            map.recommended_enemy_level(),
+            state
+        );
+        text_color.0 = if current {
+            Color::srgb(0.14, 0.06, 0.02)
+        } else if unlocked {
+            Color::srgb(0.95, 0.84, 0.58)
+        } else {
+            Color::srgba(0.58, 0.54, 0.48, 0.72)
+        };
+    }
+}
+
+fn portal_visible_map_range(anchor: usize, total_maps: usize) -> std::ops::Range<usize> {
+    if total_maps == 0 {
+        return 0..0;
+    }
+
+    let visible_count = PORTAL_ROUTE_VISIBLE_COUNT.min(total_maps);
+    let anchor = anchor.min(total_maps - 1);
+    let mut start = anchor.saturating_sub(visible_count / 2);
+    if start + visible_count > total_maps {
+        start = total_maps - visible_count;
+    }
+    start..start + visible_count
 }
 
 pub(crate) fn sync_inventory_panel(
@@ -1403,6 +1614,8 @@ pub(crate) fn sync_hud_text(
     mut query: Query<(&HudText, &mut Text2d)>,
 ) {
     let map = &database.maps[run.map_index];
+    let unlocked_count = profile.highest_unlocked_map_index(&database) + 1;
+    let total_maps = database.maps.len();
     let run_status = match run.status {
         RunStatus::Running => "Running",
         RunStatus::Dead => "Rebuilding",
@@ -1413,16 +1626,13 @@ pub(crate) fn sync_hud_text(
         text.0 = match kind {
             HudText::Header => format!("Gold {:>6}", profile.gold),
             HudText::Message => format!(
-                "{}\nDifficulty   Normal\nArea Level   {}\nAtlas Tier   {}\nRoute Length {:.0}m\nPacks        {}/{}\nEnemies      {}/{}\nSpawned      {}\nStatus       {}\nLog\n{}",
+                "{}\nStage {}/{}  Enemy Lv {}\nUnlocked {}/{}  {}\n{}",
                 map.name,
-                map.area_level,
-                run.atlas_tier,
-                map.finish_x,
-                run.next_pack_index,
-                map.packs.len(),
-                run.enemies_defeated,
-                run.enemies_total,
-                run.enemies_spawned,
+                run.map_index + 1,
+                total_maps,
+                map.recommended_enemy_level(),
+                unlocked_count,
+                total_maps,
                 run_status,
                 portal_log_lines(&run.message),
             ),

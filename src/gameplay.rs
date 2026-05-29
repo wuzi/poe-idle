@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::components::{AttackClock, CharacterVisual, Enemy, Health, MapEntity, Player};
+use crate::components::{AttackClock, CharacterVisual, Enemy, Health, MapEntity, Player, UiState};
 use crate::constants::{
     ENEMY_ATTACK_RANGE, PLAYER_ATTACK_RANGE, PLAYER_START_X, PLAYER_Y, SPAWN_AHEAD_DISTANCE,
 };
@@ -23,6 +23,43 @@ pub(crate) fn begin_current_map(run: &mut RunState, database: &GameDatabase) {
     run.message = format!("{} map opened", map.name);
 }
 
+pub(crate) fn handle_map_selection_requests(
+    mut ui_state: ResMut<UiState>,
+    database: Res<GameDatabase>,
+    profile: Res<PlayerProfile>,
+    mut run: ResMut<RunState>,
+    mut commands: Commands,
+    mut player_query: Query<(&mut Transform, &mut Health, &mut AttackClock), With<Player>>,
+    cleanup_query: Query<Entity, With<MapEntity>>,
+) {
+    let Some(requested_map_index) = ui_state.requested_map_index.take() else {
+        return;
+    };
+
+    if requested_map_index >= database.maps.len()
+        || !profile.map_unlocked(&database, requested_map_index)
+    {
+        return;
+    }
+
+    for entity in &cleanup_query {
+        commands.entity(entity).despawn();
+    }
+
+    if let Ok((mut transform, mut health, mut clock)) = player_query.single_mut() {
+        let stats = profile.derived_stats(&database);
+        transform.translation.x = PLAYER_START_X;
+        transform.translation.y = PLAYER_Y;
+        health.max = stats.max_health;
+        health.current = stats.max_health;
+        clock.remaining = 0.0;
+    }
+
+    run.map_index = requested_map_index;
+    run.atlas_tier = 1;
+    begin_current_map(&mut run, &database);
+}
+
 pub(crate) fn handle_map_transitions(
     time: Res<Time>,
     database: Res<GameDatabase>,
@@ -42,10 +79,8 @@ pub(crate) fn handle_map_transitions(
     }
 
     if run.status == RunStatus::Cleared {
-        run.map_index = (run.map_index + 1) % database.maps.len();
-        if run.map_index == 0 {
-            run.atlas_tier += 1;
-        }
+        run.map_index = (run.map_index + 1).min(profile.highest_unlocked_map_index(&database));
+        run.atlas_tier = 1;
     }
 
     for entity in &cleanup_query {
@@ -410,8 +445,17 @@ pub(crate) fn resolve_combat_outcomes(
     if run.enemies_defeated >= run.enemies_total
         && run.next_pack_index >= database.maps[run.map_index].packs.len()
     {
+        let cleared_map_index = run.map_index;
+        let unlocked_map_index = profile.unlock_next_map(&database, cleared_map_index);
         run.status = RunStatus::Cleared;
         run.transition_remaining = 2.0;
-        run.message = format!("{} cleared", database.maps[run.map_index].name);
+        run.message = if let Some(unlocked_map_index) = unlocked_map_index {
+            format!(
+                "{} cleared. {} unlocked",
+                database.maps[cleared_map_index].name, database.maps[unlocked_map_index].name
+            )
+        } else {
+            format!("{} cleared", database.maps[cleared_map_index].name)
+        };
     }
 }

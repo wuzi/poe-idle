@@ -42,25 +42,27 @@ pub(crate) fn setup(
     );
     spawn_health_bar(&mut commands, player, 68.0, 50.0, false);
     let talents = profile.class(&database).talents.clone();
-    spawn_screen_layout(&mut commands, &talents);
+    spawn_screen_layout(&mut commands, &talents, database.maps.len());
     begin_current_map(&mut run, &database);
 }
 
 fn spawn_background(commands: &mut Commands, map: &MapDefinition) {
+    let world_width = 10_400.0;
+    let world_center_x = 4_300.0;
     spawn_rect(
         commands,
         map.background,
-        Vec2::new(3800.0, 960.0),
-        Vec3::new(1150.0, 0.0, -10.0),
+        Vec2::new(world_width, 960.0),
+        Vec3::new(world_center_x, 0.0, -10.0),
     );
     spawn_rect(
         commands,
         Color::srgba(0.09, 0.13, 0.13, 0.85),
-        Vec2::new(3900.0, 190.0),
-        Vec3::new(1150.0, -355.0, -4.0),
+        Vec2::new(world_width + 100.0, 190.0),
+        Vec3::new(world_center_x, -355.0, -4.0),
     );
 
-    for index in 0..9 {
+    for index in 0..24 {
         let x = -360.0 + index as f32 * 430.0;
         let height = 150.0 + (index % 3) as f32 * 46.0;
         spawn_rect(
@@ -71,7 +73,7 @@ fn spawn_background(commands: &mut Commands, map: &MapDefinition) {
         );
     }
 
-    for index in 0..18 {
+    for index in 0..52 {
         let x = -360.0 + index as f32 * 210.0;
         spawn_rect(
             commands,

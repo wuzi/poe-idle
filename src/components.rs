@@ -7,6 +7,7 @@ pub(crate) struct UiState {
     pub(crate) active_panel: ActivePanel,
     pub(crate) dragged_item: Option<DraggedItem>,
     pub(crate) portal_visible: bool,
+    pub(crate) requested_map_index: Option<usize>,
     pub(crate) hovered_talent: Option<usize>,
     pub(crate) crafting_message: String,
 }
@@ -17,6 +18,7 @@ impl Default for UiState {
             active_panel: ActivePanel::Character,
             dragged_item: None,
             portal_visible: true,
+            requested_map_index: None,
             hovered_talent: None,
             crafting_message: String::new(),
         }
@@ -105,6 +107,17 @@ pub(crate) struct PortalToggleButton {
 
 #[derive(Component)]
 pub(crate) struct PortalToggleButtonLabel;
+
+#[derive(Component)]
+pub(crate) struct PortalMapButton {
+    pub(crate) map_index: usize,
+    pub(crate) size: Vec2,
+}
+
+#[derive(Component)]
+pub(crate) struct PortalMapButtonLabel {
+    pub(crate) map_index: usize,
+}
 
 #[derive(Component)]
 pub(crate) struct CharacterPanelPiece;
