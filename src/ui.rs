@@ -288,7 +288,7 @@ fn spawn_character_panel(commands: &mut Commands) {
     spawn_character_panel_text(
         commands,
         CharacterPanelText::Equipment,
-        Vec3::new(36.0, -22.0, 44.0),
+        Vec3::new(36.0, 24.0, 44.0),
         13.0,
         Color::srgb(0.92, 0.89, 0.80),
     );
@@ -302,7 +302,7 @@ fn spawn_character_panel(commands: &mut Commands) {
     spawn_character_panel_text(
         commands,
         CharacterPanelText::Upgrades,
-        Vec3::new(36.0, 86.0, 44.0),
+        Vec3::new(36.0, 166.0, 44.0),
         13.0,
         Color::srgb(0.92, 0.89, 0.80),
     );
