@@ -220,6 +220,7 @@ pub(crate) fn player_attack(
     database: Res<GameDatabase>,
     profile: Res<PlayerProfile>,
     run: Res<RunState>,
+    mut rng: ResMut<LootRng>,
     mut commands: Commands,
     mut player_query: Query<(&Transform, &mut AttackClock), With<Player>>,
     mut enemy_targets: ParamSet<(
@@ -258,14 +259,28 @@ pub(crate) fn player_attack(
 
     let stats = profile.derived_stats(&database);
     if let Ok((enemy_transform, mut health, enemy)) = enemy_targets.p1().get_mut(target) {
-        let damage = damage_after_armor(stats.damage, enemy.armor);
+        let is_crit = rng.percent() <= stats.crit_chance;
+        let raw_damage = if is_crit {
+            stats.damage * (1.0 + stats.crit_damage / 100.0)
+        } else {
+            stats.damage
+        };
+        let damage = damage_after_armor(raw_damage, enemy.armor);
         health.current -= damage;
         clock.remaining = 1.0 / stats.attacks_per_second;
         spawn_floating_text(
             &mut commands,
-            format!("-{damage:.0}"),
+            if is_crit {
+                format!("CRIT -{damage:.0}")
+            } else {
+                format!("-{damage:.0}")
+            },
             enemy_transform.translation + Vec3::new(0.0, 46.0, 20.0),
-            Color::srgb(1.0, 0.83, 0.45),
+            if is_crit {
+                Color::srgb(1.0, 0.96, 0.32)
+            } else {
+                Color::srgb(1.0, 0.83, 0.45)
+            },
         );
     }
 }

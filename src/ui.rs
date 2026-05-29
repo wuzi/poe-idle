@@ -13,9 +13,9 @@ use crate::constants::{
 };
 use crate::data::{
     GameDatabase, ItemInstance, ItemLocation, ItemSlot, PlayerProfile, Rarity, RunState,
-    TalentGrant, item_armor_bonus, item_attack_speed_bonus, item_damage_bonus,
-    item_health_regen_bonus, item_life_bonus, item_move_speed_bonus, item_slot_effect,
-    rarity_color, rarity_effect,
+    TalentGrant, item_armor_bonus, item_attack_speed_bonus, item_crit_chance_bonus,
+    item_crit_damage_bonus, item_damage_bonus, item_health_regen_bonus, item_life_bonus,
+    item_move_speed_bonus, item_slot_effect, rarity_color, rarity_effect,
 };
 
 pub(crate) fn spawn_screen_layout(commands: &mut Commands) {
@@ -608,10 +608,12 @@ pub(crate) fn sync_character_panel(
                 profile.respawns,
             ),
             CharacterPanelText::Combat => format!(
-                "Combat\nDamage {:.0}\nArmor {:.0}\nAttacks/sec {:.2}\nMove speed {:.0}\nRegen {:.1}/s\nLoot bonus +{:.0}%",
+                "Combat\nDamage {:.0}\nArmor {:.0}\nAttacks/sec {:.2}\nCrit {:.1}% / +{:.0}%\nMove speed {:.0}\nRegen {:.1}/s\nLoot bonus +{:.0}%",
                 stats.damage,
                 stats.armor,
                 stats.attacks_per_second,
+                stats.crit_chance,
+                stats.crit_damage,
                 stats.move_speed,
                 stats.health_regeneration,
                 stats.loot_bonus,
@@ -893,11 +895,13 @@ pub(crate) fn sync_hud_text(
                 class.name, profile.level, profile.gold, run.atlas_tier
             ),
             HudText::Stats => format!(
-                "{}  |  DMG {:.0}  ARM {:.0}  APS {:.2}  MS {:.0}\nRegen {:.1}/s  |  STR {}  DEX {}  INT {}  VIT {}",
+                "{}  |  DMG {:.0}  ARM {:.0}  APS {:.2}  Crit {:.1}%/+{:.0}%\nMS {:.0}  Regen {:.1}/s  |  STR {}  DEX {}  INT {}  VIT {}",
                 health_text,
                 stats.damage,
                 stats.armor,
                 stats.attacks_per_second,
+                stats.crit_chance,
+                stats.crit_damage,
                 stats.move_speed,
                 stats.health_regeneration,
                 attributes.strength,
@@ -920,6 +924,8 @@ fn item_tooltip_text(item: &ItemInstance, database: &GameDatabase) -> String {
     let life = item_life_bonus(item, definition);
     let move_speed = item_move_speed_bonus(item);
     let attack_speed = item_attack_speed_bonus(item);
+    let crit_chance = item_crit_chance_bonus(item);
+    let crit_damage = item_crit_damage_bonus(item);
     let health_regen = item_health_regen_bonus(item);
     let mut lines = vec![
         definition.name.to_string(),
@@ -944,6 +950,12 @@ fn item_tooltip_text(item: &ItemInstance, database: &GameDatabase) -> String {
     }
     if attack_speed > 0.0 {
         lines.push(format!("Attack speed +{attack_speed:.1}%"));
+    }
+    if crit_chance > 0.0 {
+        lines.push(format!("Crit chance +{crit_chance:.1}%"));
+    }
+    if crit_damage > 0.0 {
+        lines.push(format!("Crit damage +{crit_damage:.0}%"));
     }
     if health_regen > 0.0 {
         lines.push(format!("Health regen +{health_regen:.1}/s"));

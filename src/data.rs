@@ -142,6 +142,8 @@ impl Default for GameDatabase {
                     rolls: ItemRollProfile {
                         damage: Some(RollRange::new(5.0, 9.0)),
                         attack_speed: Some(RollRange::new(1.0, 3.0)),
+                        crit_chance: Some(RollRange::new(1.0, 3.0)),
+                        crit_damage: Some(RollRange::new(5.0, 12.0)),
                         ..ItemRollProfile::empty()
                     },
                 },
@@ -196,6 +198,8 @@ impl Default for GameDatabase {
                     rolls: ItemRollProfile {
                         damage: Some(RollRange::new(2.0, 5.0)),
                         attack_speed: Some(RollRange::new(1.0, 3.0)),
+                        crit_chance: Some(RollRange::new(1.0, 3.0)),
+                        crit_damage: Some(RollRange::new(4.0, 10.0)),
                         ..ItemRollProfile::empty()
                     },
                 },
@@ -443,6 +447,8 @@ pub(crate) struct ItemRollProfile {
     pub(crate) max_health: Option<RollRange>,
     pub(crate) move_speed: Option<RollRange>,
     pub(crate) attack_speed: Option<RollRange>,
+    pub(crate) crit_chance: Option<RollRange>,
+    pub(crate) crit_damage: Option<RollRange>,
     pub(crate) health_regen: Option<RollRange>,
 }
 
@@ -454,6 +460,8 @@ impl ItemRollProfile {
             max_health: None,
             move_speed: None,
             attack_speed: None,
+            crit_chance: None,
+            crit_damage: None,
             health_regen: None,
         }
     }
@@ -540,6 +548,8 @@ pub(crate) struct ItemStatRolls {
     pub(crate) max_health: f32,
     pub(crate) move_speed: f32,
     pub(crate) attack_speed: f32,
+    pub(crate) crit_chance: f32,
+    pub(crate) crit_damage: f32,
     pub(crate) health_regen: f32,
 }
 
@@ -676,6 +686,8 @@ impl PlayerProfile {
         let mut item_health = 0.0;
         let mut item_move_speed = 0.0;
         let mut item_attack_speed = 0.0;
+        let mut item_crit_chance = 0.0;
+        let mut item_crit_damage = 0.0;
         let mut item_health_regen = 0.0;
 
         for item in self.equipment.iter().flatten() {
@@ -684,6 +696,8 @@ impl PlayerProfile {
             item_health += item.rolls.max_health;
             item_move_speed += item.rolls.move_speed;
             item_attack_speed += item.rolls.attack_speed;
+            item_crit_chance += item.rolls.crit_chance;
+            item_crit_damage += item.rolls.crit_damage;
             item_health_regen += item.rolls.health_regen;
         }
 
@@ -722,6 +736,10 @@ impl PlayerProfile {
         let attacks_per_second = ((class.attacks_per_second + attributes.dexterity as f32 * 0.004)
             * (1.0 + item_attack_speed / 100.0))
             .clamp(0.45, 5.0);
+        let crit_chance =
+            (5.0 + attributes.dexterity as f32 * 0.08 + item_crit_chance).clamp(0.0, 75.0);
+        let crit_damage =
+            (50.0 + attributes.strength as f32 * 0.20 + item_crit_damage).clamp(0.0, 350.0);
         let move_speed = (PLAYER_SPEED + attributes.dexterity as f32 * 0.28 + item_move_speed)
             .clamp(40.0, 260.0);
         let health_regeneration =
@@ -732,6 +750,8 @@ impl PlayerProfile {
             damage,
             armor,
             attacks_per_second,
+            crit_chance,
+            crit_damage,
             move_speed,
             health_regeneration,
             loot_bonus,
@@ -901,6 +921,8 @@ pub(crate) struct DerivedStats {
     pub(crate) damage: f32,
     pub(crate) armor: f32,
     pub(crate) attacks_per_second: f32,
+    pub(crate) crit_chance: f32,
+    pub(crate) crit_damage: f32,
     pub(crate) move_speed: f32,
     pub(crate) health_regeneration: f32,
     pub(crate) loot_bonus: f32,
@@ -1058,6 +1080,8 @@ fn roll_item_stats(
         max_health: roll_stat(rng, definition.rolls.max_health, item_level, rarity),
         move_speed: roll_stat(rng, definition.rolls.move_speed, item_level, rarity),
         attack_speed: roll_stat(rng, definition.rolls.attack_speed, item_level, rarity),
+        crit_chance: roll_stat(rng, definition.rolls.crit_chance, item_level, rarity),
+        crit_damage: roll_stat(rng, definition.rolls.crit_damage, item_level, rarity),
         health_regen: roll_stat(rng, definition.rolls.health_regen, item_level, rarity),
     }
 }
@@ -1073,6 +1097,8 @@ fn minimum_item_stats(
         max_health: minimum_stat(definition.rolls.max_health, item_level, rarity),
         move_speed: minimum_stat(definition.rolls.move_speed, item_level, rarity),
         attack_speed: minimum_stat(definition.rolls.attack_speed, item_level, rarity),
+        crit_chance: minimum_stat(definition.rolls.crit_chance, item_level, rarity),
+        crit_damage: minimum_stat(definition.rolls.crit_damage, item_level, rarity),
         health_regen: minimum_stat(definition.rolls.health_regen, item_level, rarity),
     }
 }
@@ -1117,6 +1143,8 @@ fn item_power_score(
         + rolls.max_health * 0.18
         + rolls.move_speed * 0.85
         + rolls.attack_speed * 1.4
+        + rolls.crit_chance * 2.2
+        + rolls.crit_damage * 0.45
         + rolls.health_regen * 4.0;
     definition.base_power + item_level + rarity.multiplier() * 2 + weighted_stats.round() as u32
 }
@@ -1151,17 +1179,25 @@ pub(crate) fn item_attack_speed_bonus(item: &ItemInstance) -> f32 {
     item.rolls.attack_speed
 }
 
+pub(crate) fn item_crit_chance_bonus(item: &ItemInstance) -> f32 {
+    item.rolls.crit_chance
+}
+
+pub(crate) fn item_crit_damage_bonus(item: &ItemInstance) -> f32 {
+    item.rolls.crit_damage
+}
+
 pub(crate) fn item_health_regen_bonus(item: &ItemInstance) -> f32 {
     item.rolls.health_regen
 }
 
 pub(crate) fn item_slot_effect(slot: ItemSlot) -> &'static str {
     match slot {
-        ItemSlot::Weapon => "Effect: rolls damage and attack speed.",
+        ItemSlot::Weapon => "Effect: rolls damage, attack speed, and critical stats.",
         ItemSlot::Shield => "Effect: reduces incoming hit damage through armor.",
         ItemSlot::Head => "Effect: rolls armor, maximum life, and health regeneration.",
         ItemSlot::Chest => "Effect: rolls strong armor, life, and health regeneration.",
-        ItemSlot::Gloves => "Effect: rolls attack speed and damage.",
+        ItemSlot::Gloves => "Effect: rolls attack speed, damage, and critical stats.",
         ItemSlot::Legs => "Effect: rolls armor, life, and health regeneration.",
         ItemSlot::Boots => "Effect: rolls movement speed for faster map travel.",
         ItemSlot::Trinket => "Effect: adds flexible damage and survival stats.",
