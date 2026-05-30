@@ -1,5 +1,4 @@
 use bevy::prelude::*;
-use bevy::sprite::Anchor;
 
 mod crafting;
 mod talents;
@@ -11,17 +10,17 @@ pub(crate) use talents::{handle_talent_panel, sync_talent_panel};
 use crafting::{spawn_crafting_panel, use_item_on_crafting_panel};
 use talents::spawn_talent_panel;
 use theme::{
-    STANDARD_PANEL_SIZE, UiColors, UiFontSize, bounded_lines, navigation_button_color,
-    truncate_chars,
+    GRID_GAP, STANDARD_PANEL_SIZE, UiColors, UiPanelSpec, bounded_lines, navigation_button_color,
+    spawn_panel_section, spawn_panel_window, truncate_chars,
 };
 
 use crate::components::{
     ActivePanel, BottomButton, BottomButtonLabel, CharacterPanelPiece, CharacterPanelText,
-    CraftingPanelPiece, DraggedItem, DraggedItemVisual, EquippedTooltipBackground,
-    EquippedTooltipText, Health, HudText, InventoryCell, InventoryCellLabel, InventoryPanelPiece,
-    InventorySource, ItemTooltipBackground, ItemTooltipText, Player, PortalMapButton,
-    PortalMapButtonLabel, PortalMapRouteSlot, PortalPanelPiece, PortalToggleButton,
-    PortalToggleButtonLabel, ProgressBarFill, ScreenFixed, UiState,
+    DraggedItem, DraggedItemVisual, EquippedTooltipBackground, EquippedTooltipText, Health,
+    HudText, InventoryCell, InventoryCellLabel, InventoryPanelPiece, InventorySource,
+    ItemTooltipBackground, ItemTooltipText, Player, PortalMapButton, PortalMapButtonLabel,
+    PortalMapRouteSlot, PortalPanelPiece, PortalToggleButton, PortalToggleButtonLabel,
+    ProgressBarFill, UiState,
 };
 use crate::constants::{
     BOTTOM_BUTTON_SIZE, INVENTORY_CELL_SIZE, TOOLTIP_PADDING, TOOLTIP_WIDTH, WINDOW_HEIGHT,
@@ -44,62 +43,10 @@ pub(crate) fn spawn_screen_layout(
     talents: &[TalentNode],
     map_count: usize,
 ) {
-    spawn_fixed_rect(
-        commands,
-        Vec3::new(0.0, 368.0, 31.0),
-        Vec2::new(152.0, 24.0),
-        Color::srgba(0.13, 0.11, 0.08, 0.96),
-    );
-    spawn_fixed_rect(
-        commands,
-        Vec3::new(0.0, 352.0, 30.0),
-        Vec2::new(WINDOW_WIDTH as f32, 10.0),
-        Color::srgba(0.03, 0.025, 0.025, 0.98),
-    );
+    spawn_top_status_bar(commands);
 
     spawn_portal_ui_panel(commands, map_count);
-
-    spawn_fixed_text(
-        commands,
-        HudText::Header,
-        Vec3::new(-62.0, 378.0, 35.0),
-        14.0,
-    );
-    spawn_inventory_panel_frame(commands, Vec3::new(-394.0, 112.0, 30.0), "STASH");
-    spawn_inventory_panel_frame(commands, Vec3::new(0.0, 112.0, 30.0), "HERO");
-    spawn_inventory_panel_label(commands, "Inventory", Vec3::new(-134.0, 54.0, 35.0), 15.0);
-    spawn_inventory_panel_label(commands, "Equipped", Vec3::new(-134.0, 286.0, 35.0), 15.0);
-
-    spawn_inventory_cells(
-        commands,
-        ActivePanel::Inventory,
-        InventorySource::Stash,
-        -532.0,
-        270.0,
-        6,
-        5,
-        46.0,
-    );
-    spawn_inventory_cells(
-        commands,
-        ActivePanel::Inventory,
-        InventorySource::Equipment,
-        -134.0,
-        250.0,
-        4,
-        2,
-        46.0,
-    );
-    spawn_inventory_cells(
-        commands,
-        ActivePanel::Inventory,
-        InventorySource::Inventory,
-        -134.0,
-        18.0,
-        6,
-        4,
-        46.0,
-    );
+    spawn_inventory_panels(commands);
     spawn_bottom_button(
         commands,
         ActivePanel::Character,
@@ -132,248 +79,160 @@ pub(crate) fn spawn_screen_layout(
     spawn_dragged_item_visual(commands);
 }
 
-fn spawn_inventory_panel_frame(commands: &mut Commands, center: Vec3, title: &'static str) {
-    let (left, top) = ui_position_from_screen_center(center.truncate(), STANDARD_PANEL_SIZE);
+fn spawn_top_status_bar(commands: &mut Commands) {
     commands
         .spawn((
             Node {
                 position_type: PositionType::Absolute,
-                left: px(left),
-                top: px(top),
-                width: px(STANDARD_PANEL_SIZE.x),
-                height: px(STANDARD_PANEL_SIZE.y),
-                padding: UiRect::all(px(6)),
+                left: px(0),
+                top: px(0),
+                width: px(WINDOW_WIDTH as f32),
+                height: px(30),
+                padding: UiRect::axes(px(18), px(0)),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Center,
                 ..default()
             },
-            BackgroundColor(UiColors::frame_shadow()),
-            Visibility::Hidden,
-            ZIndex(14),
-            InventoryPanelPiece,
+            BackgroundColor(Color::srgba(0.035, 0.03, 0.025, 0.96)),
+            ZIndex(30),
         ))
-        .with_children(|panel| {
-            panel
-                .spawn((
-                    Node {
-                        width: percent(100),
-                        height: percent(100),
-                        padding: UiRect::all(px(8)),
-                        ..default()
-                    },
-                    BackgroundColor(UiColors::frame_shell()),
-                ))
-                .with_children(|shell| {
-                    shell.spawn((
-                        Node {
-                            position_type: PositionType::Absolute,
-                            left: px(14),
-                            top: px(60),
-                            width: px(340),
-                            height: px(426),
-                            ..default()
-                        },
-                        BackgroundColor(UiColors::frame_body()),
-                    ));
-                    shell.spawn((
-                        Node {
-                            position_type: PositionType::Absolute,
-                            left: px(15),
-                            top: px(24),
-                            width: px(338),
-                            height: px(40),
-                            align_items: AlignItems::Center,
-                            padding: UiRect::left(px(16)),
-                            ..default()
-                        },
-                        BackgroundColor(UiColors::header()),
-                    ));
-                    shell.spawn((
-                        Node {
-                            position_type: PositionType::Absolute,
-                            left: px(15),
-                            top: px(64),
-                            width: px(338),
-                            height: px(4),
-                            ..default()
-                        },
-                        BackgroundColor(UiColors::accent()),
-                    ));
-                    shell.spawn((
-                        Text::new(title),
-                        TextFont {
-                            font_size: UiFontSize::WINDOW_TITLE,
-                            ..default()
-                        },
-                        TextColor(UiColors::text_header()),
-                        Node {
-                            position_type: PositionType::Absolute,
-                            left: px(24),
-                            top: px(30),
-                            ..default()
-                        },
-                        Label,
-                    ));
-                });
+        .with_children(|bar| {
+            bar.spawn((
+                Text::new(""),
+                TextFont {
+                    font_size: 14.0,
+                    ..default()
+                },
+                TextColor(UiColors::text_primary()),
+                HudText::Header,
+                Label,
+            ));
         });
 }
 
+fn spawn_inventory_panels(commands: &mut Commands) {
+    spawn_panel_window(
+        commands,
+        InventoryPanelPiece,
+        UiPanelSpec {
+            left: 12.0,
+            top: 17.0,
+            size: STANDARD_PANEL_SIZE,
+            title: "STASH",
+            body_color: UiColors::frame_body(),
+            visibility: Visibility::Hidden,
+            z_index: 12,
+        },
+        |body| {
+            spawn_panel_section(body, "Stored Gear", 1.0, |section| {
+                spawn_inventory_grid(
+                    section,
+                    ActivePanel::Inventory,
+                    InventorySource::Stash,
+                    6,
+                    5,
+                    GRID_GAP,
+                );
+            });
+        },
+    );
+
+    spawn_panel_window(
+        commands,
+        InventoryPanelPiece,
+        UiPanelSpec {
+            left: 406.0,
+            top: 17.0,
+            size: STANDARD_PANEL_SIZE,
+            title: "HERO",
+            body_color: UiColors::frame_body(),
+            visibility: Visibility::Hidden,
+            z_index: 12,
+        },
+        |body| {
+            spawn_panel_section(body, "Equipped", 0.45, |section| {
+                spawn_inventory_grid(
+                    section,
+                    ActivePanel::Inventory,
+                    InventorySource::Equipment,
+                    4,
+                    2,
+                    GRID_GAP,
+                );
+            });
+            spawn_panel_section(body, "Inventory", 1.0, |section| {
+                spawn_inventory_grid(
+                    section,
+                    ActivePanel::Inventory,
+                    InventorySource::Inventory,
+                    6,
+                    4,
+                    GRID_GAP,
+                );
+            });
+        },
+    );
+}
+
 fn spawn_portal_ui_panel(commands: &mut Commands, map_count: usize) {
-    commands
-        .spawn((
-            Node {
-                position_type: PositionType::Absolute,
-                left: px(800.0),
-                top: px(17.0),
-                width: px(368.0),
-                height: px(502.0),
-                padding: UiRect::all(px(6)),
-                flex_direction: FlexDirection::Column,
-                ..default()
-            },
-            BackgroundColor(UiColors::frame_shadow()),
-            Visibility::Visible,
-            ZIndex(12),
-            PortalPanelPiece,
-        ))
-        .with_children(|panel| {
-            panel
-                .spawn((
-                    Node {
-                        width: percent(100),
-                        height: percent(100),
-                        padding: UiRect::all(px(6)),
-                        flex_direction: FlexDirection::Column,
-                        row_gap: px(8),
+    spawn_panel_window(
+        commands,
+        PortalPanelPiece,
+        UiPanelSpec {
+            left: 800.0,
+            top: 17.0,
+            size: STANDARD_PANEL_SIZE,
+            title: "PORTAL",
+            body_color: UiColors::frame_body(),
+            visibility: Visibility::Visible,
+            z_index: 12,
+        },
+        |body| {
+            spawn_panel_section(body, "Map Details", 0.42, |details| {
+                details.spawn((
+                    Text::new(""),
+                    TextFont {
+                        font_size: 13.0,
                         ..default()
                     },
-                    BackgroundColor(UiColors::frame_shell()),
-                ))
-                .with_children(|shell| {
-                    shell
-                        .spawn((
-                            Node {
-                                width: percent(100),
-                                height: px(40.0),
-                                padding: UiRect::axes(px(18), px(0)),
-                                align_items: AlignItems::Center,
-                                ..default()
-                            },
-                            BackgroundColor(UiColors::header()),
-                        ))
-                        .with_children(|header| {
-                            header.spawn((
-                                Text::new("PORTAL"),
-                                TextFont {
-                                    font_size: 22.0,
-                                    ..default()
-                                },
-                                TextColor(UiColors::text_header()),
-                                Label,
-                            ));
-                        });
-
-                    shell.spawn((
+                    TextColor(UiColors::text_primary()),
+                    TextLayout::new_with_justify(Justify::Left),
+                    Node {
+                        width: percent(100),
+                        ..default()
+                    },
+                    HudText::Message,
+                    Label,
+                ));
+                details
+                    .spawn((
                         Node {
                             width: percent(100),
-                            height: px(4.0),
+                            height: px(12.0),
                             ..default()
                         },
-                        BackgroundColor(UiColors::accent()),
-                    ));
-
-                    shell
-                        .spawn((
+                        BackgroundColor(Color::srgba(0.05, 0.04, 0.035, 0.95)),
+                    ))
+                    .with_children(|bar| {
+                        bar.spawn((
                             Node {
-                                width: percent(100),
-                                flex_grow: 1.0,
-                                padding: UiRect::all(px(10)),
-                                flex_direction: FlexDirection::Column,
-                                row_gap: px(8),
-                                overflow: Overflow::clip_y(),
+                                width: px(1.0),
+                                height: percent(100),
                                 ..default()
                             },
-                            BackgroundColor(UiColors::frame_body()),
-                        ))
-                        .with_children(|body| {
-                            body.spawn((
-                                Node {
-                                    width: percent(100),
-                                    padding: UiRect::all(px(10)),
-                                    flex_direction: FlexDirection::Column,
-                                    row_gap: px(8),
-                                    ..default()
-                                },
-                                BackgroundColor(UiColors::section()),
-                            ))
-                            .with_children(|details| {
-                                details.spawn((
-                                    Text::new("MAP DETAILS"),
-                                    TextFont {
-                                        font_size: 15.0,
-                                        ..default()
-                                    },
-                                    TextColor(UiColors::text_section()),
-                                    Label,
-                                ));
-                                details.spawn((
-                                    Text::new(""),
-                                    TextFont {
-                                        font_size: 13.0,
-                                        ..default()
-                                    },
-                                    TextColor(UiColors::text_primary()),
-                                    TextLayout::new_with_justify(Justify::Left),
-                                    Node {
-                                        width: percent(100),
-                                        ..default()
-                                    },
-                                    HudText::Message,
-                                    Label,
-                                ));
-                                details
-                                    .spawn((
-                                        Node {
-                                            width: percent(100),
-                                            height: px(12.0),
-                                            ..default()
-                                        },
-                                        BackgroundColor(Color::srgba(0.05, 0.04, 0.035, 0.95)),
-                                    ))
-                                    .with_children(|bar| {
-                                        bar.spawn((
-                                            Node {
-                                                width: px(1.0),
-                                                height: percent(100),
-                                                ..default()
-                                            },
-                                            BackgroundColor(Color::srgb(0.94, 0.66, 0.22)),
-                                            ProgressBarFill,
-                                        ));
-                                    });
-                            });
+                            BackgroundColor(Color::srgb(0.94, 0.66, 0.22)),
+                            ProgressBarFill,
+                        ));
+                    });
+            });
 
-                            body.spawn((
-                                Node {
-                                    width: percent(100),
-                                    flex_grow: 1.0,
-                                    min_height: px(0),
-                                    padding: UiRect::all(px(10)),
-                                    flex_direction: FlexDirection::Column,
-                                    row_gap: px(6),
-                                    overflow: Overflow::clip_y(),
-                                    ..default()
-                                },
-                                BackgroundColor(UiColors::section()),
-                            ))
-                            .with_children(|route| {
-                                for slot_index in
-                                    0..PORTAL_ROUTE_VISIBLE_COUNT.min(map_count.max(1))
-                                {
-                                    spawn_portal_ui_route_button(route, slot_index);
-                                }
-                            });
-                        });
-                });
-        });
+            spawn_panel_section(body, "Route", 1.0, |route| {
+                for slot_index in 0..PORTAL_ROUTE_VISIBLE_COUNT.min(map_count.max(1)) {
+                    spawn_portal_ui_route_button(route, slot_index);
+                }
+            });
+        },
+    );
 }
 
 fn spawn_portal_ui_route_button(parent: &mut ChildSpawnerCommands, slot_index: usize) {
@@ -414,156 +273,84 @@ fn spawn_portal_ui_route_button(parent: &mut ChildSpawnerCommands, slot_index: u
         });
 }
 
-fn spawn_inventory_cells(
-    commands: &mut Commands,
+pub(super) fn spawn_inventory_grid(
+    parent: &mut ChildSpawnerCommands,
     panel: ActivePanel,
     source: InventorySource,
-    start_x: f32,
-    start_y: f32,
     columns: usize,
     rows: usize,
-    step: f32,
+    gap: f32,
 ) {
-    let cell_z = match panel {
-        ActivePanel::Crafting => 48.0,
-        _ => 34.0,
-    };
     for row in 0..rows {
-        for column in 0..columns {
-            let index = row * columns + column;
-            let offset = Vec3::new(
-                start_x + column as f32 * step,
-                start_y - row as f32 * step,
-                cell_z,
-            );
-            let (left, top) =
-                ui_position_from_screen_center(offset.truncate(), Vec2::splat(INVENTORY_CELL_SIZE));
-            let mut cell = commands.spawn((
-                Button,
-                Node {
-                    position_type: PositionType::Absolute,
-                    left: px(left),
-                    top: px(top),
-                    width: px(INVENTORY_CELL_SIZE),
-                    height: px(INVENTORY_CELL_SIZE),
-                    align_items: AlignItems::Center,
-                    justify_content: JustifyContent::Center,
-                    border: UiRect::all(px(1)),
+        parent
+            .spawn((Node {
+                width: percent(100),
+                height: px(INVENTORY_CELL_SIZE),
+                flex_direction: FlexDirection::Row,
+                column_gap: px(gap),
+                ..default()
+            },))
+            .with_children(|row_parent| {
+                for column in 0..columns {
+                    let index = row * columns + column;
+                    spawn_inventory_cell(row_parent, panel, source, index);
+                }
+            });
+    }
+}
+
+fn spawn_inventory_cell(
+    parent: &mut ChildSpawnerCommands,
+    panel: ActivePanel,
+    source: InventorySource,
+    index: usize,
+) {
+    parent
+        .spawn((
+            Button,
+            Node {
+                width: px(INVENTORY_CELL_SIZE),
+                height: px(INVENTORY_CELL_SIZE),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Center,
+                border: UiRect::all(px(1)),
+                ..default()
+            },
+            BorderColor::all(Color::srgba(0.04, 0.035, 0.03, 0.96)),
+            BackgroundColor(Color::srgba(0.10, 0.10, 0.11, 0.98)),
+            InventoryCell {
+                panel,
+                source,
+                index,
+            },
+        ))
+        .with_children(|cell| {
+            cell.spawn((
+                Text::new(""),
+                TextFont {
+                    font_size: 9.0,
                     ..default()
                 },
-                BorderColor::all(Color::srgba(0.04, 0.035, 0.03, 0.96)),
-                BackgroundColor(Color::srgba(0.10, 0.10, 0.11, 0.98)),
-                Visibility::Hidden,
-                ZIndex(match panel {
-                    ActivePanel::Crafting => 18,
-                    _ => 16,
-                }),
-                InventoryCell {
+                TextColor(Color::srgb(0.18, 0.16, 0.13)),
+                TextLayout::new_with_justify(Justify::Center),
+                Node {
+                    width: percent(100),
+                    ..default()
+                },
+                InventoryCellLabel {
                     panel,
                     source,
                     index,
                 },
+                Label,
             ));
-            tag_inventory_cell_panel(&mut cell, panel);
-            cell.with_children(|parent| {
-                let mut label = parent.spawn((
-                    Text::new(""),
-                    TextFont {
-                        font_size: 9.0,
-                        ..default()
-                    },
-                    TextColor(Color::srgb(0.18, 0.16, 0.13)),
-                    TextLayout::new_with_justify(Justify::Center),
-                    InventoryCellLabel {
-                        panel,
-                        source,
-                        index,
-                    },
-                    Label,
-                ));
-                tag_inventory_cell_panel(&mut label, panel);
-            });
-        }
-    }
+        });
 }
 
 fn ui_position_from_screen_center(center: Vec2, size: Vec2) -> (f32, f32) {
     (
         center.x + WINDOW_WIDTH as f32 * 0.5 - size.x * 0.5,
         WINDOW_HEIGHT as f32 * 0.5 - center.y - size.y * 0.5,
-    )
-}
-
-fn tag_inventory_cell_panel(entity: &mut EntityCommands, panel: ActivePanel) {
-    match panel {
-        ActivePanel::Inventory => {
-            entity.insert(InventoryPanelPiece);
-        }
-        ActivePanel::Crafting => {
-            entity.insert(CraftingPanelPiece);
-        }
-        _ => {}
-    }
-}
-
-fn spawn_fixed_rect(commands: &mut Commands, offset: Vec3, size: Vec2, color: Color) {
-    commands.spawn((
-        Sprite::from_color(color, size),
-        Transform::from_translation(offset),
-        ScreenFixed { offset },
-    ));
-}
-
-fn spawn_fixed_text(commands: &mut Commands, kind: HudText, offset: Vec3, font_size: f32) {
-    commands.spawn((
-        Text2d::new(""),
-        TextFont {
-            font_size,
-            ..default()
-        },
-        TextColor(UiColors::text_primary()),
-        TextLayout::new_with_justify(Justify::Left),
-        Anchor::TOP_LEFT,
-        Transform::from_translation(offset),
-        ScreenFixed { offset },
-        kind,
-    ));
-}
-
-fn spawn_inventory_panel_label(
-    commands: &mut Commands,
-    label: &'static str,
-    offset: Vec3,
-    font_size: f32,
-) {
-    let (left, top) = ui_position_from_screen_top_left(offset.truncate());
-    commands.spawn((
-        Text::new(label),
-        TextFont {
-            font_size,
-            ..default()
-        },
-        TextColor(UiColors::text_section()),
-        TextLayout::new_with_justify(Justify::Left),
-        Node {
-            position_type: PositionType::Absolute,
-            left: px(left),
-            top: px(top),
-            width: px(180),
-            height: px(24),
-            ..default()
-        },
-        Visibility::Hidden,
-        ZIndex(21),
-        InventoryPanelPiece,
-        Label,
-    ));
-}
-
-fn ui_position_from_screen_top_left(top_left: Vec2) -> (f32, f32) {
-    (
-        top_left.x + WINDOW_WIDTH as f32 * 0.5,
-        WINDOW_HEIGHT as f32 * 0.5 - top_left.y,
     )
 }
 
@@ -592,10 +379,7 @@ fn spawn_bottom_button(
             BorderColor::all(UiColors::accent()),
             BackgroundColor(navigation_button_color(false, false)),
             ZIndex(20),
-            BottomButton {
-                panel,
-                size: BOTTOM_BUTTON_SIZE,
-            },
+            BottomButton { panel },
         ))
         .with_children(|parent| {
             parent.spawn((
@@ -668,85 +452,20 @@ fn spawn_character_ui_window(
     top: f32,
     spawn_body: impl FnOnce(&mut ChildSpawnerCommands),
 ) {
-    commands
-        .spawn((
-            Node {
-                position_type: PositionType::Absolute,
-                left: px(left),
-                top: px(top),
-                width: px(368.0),
-                height: px(502.0),
-                padding: UiRect::all(px(6)),
-                flex_direction: FlexDirection::Column,
-                ..default()
-            },
-            BackgroundColor(UiColors::frame_shadow()),
-            Visibility::Hidden,
-            ZIndex(12),
-            CharacterPanelPiece,
-        ))
-        .with_children(|panel| {
-            panel
-                .spawn((
-                    Node {
-                        width: percent(100),
-                        height: percent(100),
-                        padding: UiRect::all(px(6)),
-                        flex_direction: FlexDirection::Column,
-                        row_gap: px(8),
-                        ..default()
-                    },
-                    BackgroundColor(UiColors::frame_shell()),
-                ))
-                .with_children(|shell| {
-                    shell
-                        .spawn((
-                            Node {
-                                width: percent(100),
-                                height: px(40.0),
-                                padding: UiRect::axes(px(18), px(0)),
-                                align_items: AlignItems::Center,
-                                ..default()
-                            },
-                            BackgroundColor(UiColors::header()),
-                        ))
-                        .with_children(|header| {
-                            header.spawn((
-                                Text::new(title),
-                                TextFont {
-                                    font_size: 22.0,
-                                    ..default()
-                                },
-                                TextColor(UiColors::text_header()),
-                                Label,
-                            ));
-                        });
-
-                    shell.spawn((
-                        Node {
-                            width: percent(100),
-                            height: px(4.0),
-                            ..default()
-                        },
-                        BackgroundColor(UiColors::accent()),
-                    ));
-
-                    shell
-                        .spawn((
-                            Node {
-                                width: percent(100),
-                                flex_grow: 1.0,
-                                padding: UiRect::all(px(10)),
-                                flex_direction: FlexDirection::Column,
-                                row_gap: px(8),
-                                overflow: Overflow::clip_y(),
-                                ..default()
-                            },
-                            BackgroundColor(UiColors::frame_body()),
-                        ))
-                        .with_children(spawn_body);
-                });
-        });
+    spawn_panel_window(
+        commands,
+        CharacterPanelPiece,
+        UiPanelSpec {
+            left,
+            top,
+            size: STANDARD_PANEL_SIZE,
+            title,
+            body_color: UiColors::frame_body(),
+            visibility: Visibility::Hidden,
+            z_index: 12,
+        },
+        spawn_body,
+    );
 }
 
 fn spawn_character_ui_section(
@@ -867,42 +586,10 @@ fn spawn_dragged_item_visual(commands: &mut Commands) {
 pub(crate) fn handle_bottom_buttons(
     mut ui_state: ResMut<UiState>,
     mouse: Res<ButtonInput<MouseButton>>,
-    window_query: Query<&Window>,
-    mut button_query: Query<(&BottomButton, &ScreenFixed, &mut Sprite)>,
-    mut ui_button_query: Query<
-        (&BottomButton, &Interaction, &mut BackgroundColor),
-        (With<Button>, Without<Sprite>),
-    >,
+    mut ui_button_query: Query<(&BottomButton, &Interaction, &mut BackgroundColor), With<Button>>,
     mut label_query: Query<(&BottomButtonLabel, &mut TextColor)>,
 ) {
-    let cursor_offset = window_query.single().ok().and_then(|window| {
-        window.cursor_position().map(|position| {
-            Vec2::new(
-                position.x - WINDOW_WIDTH as f32 * 0.5,
-                WINDOW_HEIGHT as f32 * 0.5 - position.y,
-            )
-        })
-    });
     let mut next_panel = ui_state.active_panel;
-
-    for (button, fixed, mut sprite) in &mut button_query {
-        let hovered = cursor_offset.is_some_and(|cursor| {
-            let half_size = button.size * 0.5;
-            (cursor.x - fixed.offset.x).abs() <= half_size.x
-                && (cursor.y - fixed.offset.y).abs() <= half_size.y
-        });
-
-        if hovered && mouse.just_pressed(MouseButton::Left) {
-            next_panel = if ui_state.active_panel == button.panel {
-                ActivePanel::None
-            } else {
-                button.panel
-            };
-        }
-
-        let active = next_panel == button.panel;
-        sprite.color = navigation_button_color(active, hovered);
-    }
 
     for (button, interaction, mut background) in &mut ui_button_query {
         let hovered = matches!(*interaction, Interaction::Hovered | Interaction::Pressed);
@@ -937,15 +624,11 @@ pub(crate) fn handle_portal_button(
     mouse: Res<ButtonInput<MouseButton>>,
     mut ui_toggle_query: Query<
         (&PortalToggleButton, &Interaction, &mut BackgroundColor),
-        (With<Button>, Without<Sprite>),
+        With<Button>,
     >,
     ui_map_button_query: Query<
         (&PortalMapButton, &Interaction),
-        (
-            With<Button>,
-            Without<PortalToggleButton>,
-            Without<ScreenFixed>,
-        ),
+        (With<Button>, Without<PortalToggleButton>),
     >,
     mut label_query: Query<&mut TextColor, With<PortalToggleButtonLabel>>,
 ) {
@@ -1010,7 +693,7 @@ pub(crate) fn sync_portal_map_buttons(
             &mut Visibility,
             &mut BackgroundColor,
         ),
-        (With<Button>, Without<Sprite>),
+        With<Button>,
     >,
     mut ui_label_query: Query<
         (
@@ -1019,7 +702,7 @@ pub(crate) fn sync_portal_map_buttons(
             &mut Text,
             &mut TextColor,
         ),
-        (With<Text>, Without<Text2d>),
+        With<Text>,
     >,
 ) {
     let highest_unlocked = profile.highest_unlocked_map_index(&database);
@@ -1145,8 +828,7 @@ pub(crate) fn handle_inventory_input(
     database: Res<GameDatabase>,
     mut profile: ResMut<PlayerProfile>,
     mouse: Res<ButtonInput<MouseButton>>,
-    window_query: Query<&Window>,
-    cell_query: Query<(&InventoryCell, Option<&ScreenFixed>, Option<&Interaction>)>,
+    cell_query: Query<(&InventoryCell, &Interaction), With<Button>>,
 ) {
     if !matches!(
         ui_state.active_panel,
@@ -1156,14 +838,7 @@ pub(crate) fn handle_inventory_input(
         return;
     }
     let active_panel = ui_state.active_panel;
-
-    let Some(cursor_offset) = cursor_offset(&window_query) else {
-        if mouse.just_released(MouseButton::Left) {
-            ui_state.dragged_item = None;
-        }
-        return;
-    };
-    let hovered_cell = hovered_inventory_cell(cursor_offset, &cell_query, active_panel);
+    let hovered_cell = hovered_inventory_cell(&cell_query, active_panel);
 
     if mouse.just_pressed(MouseButton::Right) {
         if let Some((source, index)) = hovered_cell {
@@ -1248,8 +923,7 @@ pub(crate) fn sync_character_panel(
     ui_state: Res<UiState>,
     player_query: Query<&Health, With<Player>>,
     mut visibility_query: Query<&mut Visibility, With<CharacterPanelPiece>>,
-    mut text_2d_query: Query<(&CharacterPanelText, &mut Text2d)>,
-    mut ui_text_query: Query<(&CharacterPanelText, &mut Text), Without<Text2d>>,
+    mut ui_text_query: Query<(&CharacterPanelText, &mut Text)>,
 ) {
     let is_visible = ui_state.active_panel == ActivePanel::Character;
     for mut visibility in &mut visibility_query {
@@ -1322,10 +996,6 @@ pub(crate) fn sync_character_panel(
         }
     };
 
-    for (kind, mut text) in &mut text_2d_query {
-        text.0 = panel_text(kind);
-    }
-
     for (kind, mut text) in &mut ui_text_query {
         text.0 = panel_text(kind);
     }
@@ -1337,8 +1007,9 @@ pub(crate) fn update_item_tooltip(
     ui_state: Res<UiState>,
     window_query: Query<&Window>,
     cell_query: Query<
-        (&InventoryCell, Option<&ScreenFixed>, Option<&Interaction>),
+        (&InventoryCell, &Interaction),
         (
+            With<Button>,
             Without<ItemTooltipBackground>,
             Without<ItemTooltipText>,
             Without<EquippedTooltipBackground>,
@@ -1437,18 +1108,11 @@ pub(crate) fn update_item_tooltip(
         WINDOW_HEIGHT as f32 * 0.5 - cursor_position.y,
     );
     let active_panel = ui_state.active_panel;
-    let hovered_item = cell_query.iter().find_map(|(cell, fixed, interaction)| {
+    let hovered_item = cell_query.iter().find_map(|(cell, interaction)| {
         if cell.panel != active_panel {
             return None;
         }
-        let hovered = interaction.is_some_and(|interaction| {
-            matches!(*interaction, Interaction::Hovered | Interaction::Pressed)
-        }) || fixed.is_some_and(|fixed| {
-            let half_cell = INVENTORY_CELL_SIZE * 0.5;
-            let within_x = (cursor_offset.x - fixed.offset.x).abs() <= half_cell;
-            let within_y = (cursor_offset.y - fixed.offset.y).abs() <= half_cell;
-            within_x && within_y
-        });
+        let hovered = matches!(*interaction, Interaction::Hovered | Interaction::Pressed);
         if hovered {
             item_for_cell(cell, &profile).map(|item| (cell.source, item))
         } else {
@@ -1560,23 +1224,9 @@ pub(crate) fn sync_inventory_grid(
     database: Res<GameDatabase>,
     profile: Res<PlayerProfile>,
     ui_state: Res<UiState>,
-    mut sprite_query: Query<(&InventoryCell, &mut Sprite)>,
-    mut ui_cell_query: Query<
-        (&InventoryCell, &mut BackgroundColor),
-        (With<Button>, Without<Sprite>),
-    >,
-    mut text_2d_label_query: Query<(&InventoryCellLabel, &mut Text2d, &mut TextColor)>,
-    mut ui_label_query: Query<(&InventoryCellLabel, &mut Text, &mut TextColor), Without<Text2d>>,
+    mut ui_cell_query: Query<(&InventoryCell, &mut BackgroundColor), With<Button>>,
+    mut ui_label_query: Query<(&InventoryCellLabel, &mut Text, &mut TextColor)>,
 ) {
-    for (cell, mut sprite) in &mut sprite_query {
-        let (color, is_drag_source) = inventory_cell_visual(cell, &profile, &database, &ui_state);
-        sprite.color = if is_drag_source {
-            color.mix(&Color::srgba(0.02, 0.02, 0.02, 0.98), 0.45)
-        } else {
-            color
-        };
-    }
-
     for (cell, mut background) in &mut ui_cell_query {
         let (color, is_drag_source) = inventory_cell_visual(cell, &profile, &database, &ui_state);
         background.0 = if is_drag_source {
@@ -1584,17 +1234,6 @@ pub(crate) fn sync_inventory_grid(
         } else {
             color
         };
-    }
-
-    for (label, mut text, mut text_color) in &mut text_2d_label_query {
-        sync_inventory_label(
-            label,
-            &mut text.0,
-            &mut text_color.0,
-            &profile,
-            &database,
-            &ui_state,
-        );
     }
 
     for (label, mut text, mut text_color) in &mut ui_label_query {
@@ -1682,31 +1321,17 @@ fn cursor_offset(window_query: &Query<&Window>) -> Option<Vec2> {
 }
 
 fn hovered_inventory_cell(
-    cursor_offset: Vec2,
-    cell_query: &Query<(&InventoryCell, Option<&ScreenFixed>, Option<&Interaction>)>,
+    cell_query: &Query<(&InventoryCell, &Interaction), With<Button>>,
     active_panel: ActivePanel,
 ) -> Option<(InventorySource, usize)> {
-    cell_query.iter().find_map(|(cell, fixed, interaction)| {
+    cell_query.iter().find_map(|(cell, interaction)| {
         if cell.panel != active_panel {
             return None;
         }
-        if interaction.is_some_and(|interaction| {
-            matches!(*interaction, Interaction::Hovered | Interaction::Pressed)
-        }) {
+        if matches!(*interaction, Interaction::Hovered | Interaction::Pressed) {
             return Some((cell.source, cell.index));
         }
-
-        let Some(fixed) = fixed else {
-            return None;
-        };
-        let half_cell = INVENTORY_CELL_SIZE * 0.5;
-        let within_x = (cursor_offset.x - fixed.offset.x).abs() <= half_cell;
-        let within_y = (cursor_offset.y - fixed.offset.y).abs() <= half_cell;
-        if within_x && within_y {
-            Some((cell.source, cell.index))
-        } else {
-            None
-        }
+        None
     })
 }
 
@@ -1760,8 +1385,7 @@ pub(crate) fn sync_hud_text(
     database: Res<GameDatabase>,
     profile: Res<PlayerProfile>,
     run: Res<RunState>,
-    mut text_2d_query: Query<(&HudText, &mut Text2d)>,
-    mut ui_text_query: Query<(&HudText, &mut Text), Without<Text2d>>,
+    mut ui_text_query: Query<(&HudText, &mut Text)>,
 ) {
     let map = &database.maps[run.map_index];
     let unlocked_count = profile.highest_unlocked_map_index(&database) + 1;
@@ -1788,10 +1412,6 @@ pub(crate) fn sync_hud_text(
             ),
         }
     };
-
-    for (kind, mut text) in &mut text_2d_query {
-        text.0 = hud_text(kind);
-    }
 
     for (kind, mut text) in &mut ui_text_query {
         text.0 = hud_text(kind);

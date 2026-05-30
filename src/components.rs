@@ -92,7 +92,6 @@ pub(crate) enum HudText {
 #[derive(Component)]
 pub(crate) struct BottomButton {
     pub(crate) panel: ActivePanel,
-    pub(crate) size: Vec2,
 }
 
 #[derive(Component)]
@@ -139,7 +138,6 @@ pub(crate) struct CraftingPanelPiece;
 #[derive(Component)]
 pub(crate) struct TalentNodeButton {
     pub(crate) index: usize,
-    pub(crate) size: Vec2,
 }
 
 #[derive(Component)]
@@ -159,9 +157,7 @@ pub(crate) struct TalentHeaderText;
 pub(crate) struct TalentInfoText;
 
 #[derive(Component)]
-pub(crate) struct TalentResetButton {
-    pub(crate) size: Vec2,
-}
+pub(crate) struct TalentResetButton;
 
 #[derive(Component)]
 pub(crate) struct TalentResetLabel;

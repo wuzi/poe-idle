@@ -1,11 +1,9 @@
 use bevy::prelude::*;
-use bevy::sprite::Anchor;
-
-use crate::components::ScreenFixed;
 
 pub(super) const STANDARD_PANEL_SIZE: Vec2 = Vec2::new(368.0, 502.0);
-pub(super) const WIDE_PANEL_SIZE: Vec2 = Vec2::new(724.0, 540.0);
+pub(super) const WORKSPACE_PANEL_SIZE: Vec2 = Vec2::new(762.0, 502.0);
 pub(super) const ACTION_BUTTON_SIZE: Vec2 = Vec2::new(112.0, 34.0);
+pub(super) const GRID_GAP: f32 = 6.0;
 
 pub(super) struct UiColors;
 
@@ -32,10 +30,6 @@ impl UiColors {
 
     pub(super) fn accent() -> Color {
         Color::srgba(0.98, 0.56, 0.12, 0.92)
-    }
-
-    pub(super) fn divider() -> Color {
-        Color::srgba(0.70, 0.50, 0.24, 0.62)
     }
 
     pub(super) fn section() -> Color {
@@ -67,117 +61,167 @@ pub(super) struct UiFontSize;
 
 impl UiFontSize {
     pub(super) const WINDOW_TITLE: f32 = 22.0;
+    pub(super) const SECTION_TITLE: f32 = 14.0;
+    pub(super) const BODY: f32 = 12.0;
     pub(super) const BODY_SMALL: f32 = 10.5;
     pub(super) const BUTTON: f32 = 12.0;
 }
 
-pub(super) fn spawn_wide_panel_chrome<C: Component>(
+pub(super) struct UiPanelSpec {
+    pub(super) left: f32,
+    pub(super) top: f32,
+    pub(super) size: Vec2,
+    pub(super) title: &'static str,
+    pub(super) body_color: Color,
+    pub(super) visibility: Visibility,
+    pub(super) z_index: i32,
+}
+
+pub(super) fn spawn_panel_window<C: Component>(
     commands: &mut Commands,
-    marker: impl Fn() -> C + Copy,
-    center: Vec3,
+    marker: C,
+    spec: UiPanelSpec,
+    spawn_body: impl FnOnce(&mut ChildSpawnerCommands),
+) {
+    commands
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                left: px(spec.left),
+                top: px(spec.top),
+                width: px(spec.size.x),
+                height: px(spec.size.y),
+                padding: UiRect::all(px(6)),
+                flex_direction: FlexDirection::Column,
+                ..default()
+            },
+            BackgroundColor(UiColors::frame_shadow()),
+            spec.visibility,
+            ZIndex(spec.z_index),
+            marker,
+        ))
+        .with_children(|panel| {
+            panel
+                .spawn((
+                    Node {
+                        width: percent(100),
+                        height: percent(100),
+                        padding: UiRect::all(px(6)),
+                        flex_direction: FlexDirection::Column,
+                        row_gap: px(8),
+                        ..default()
+                    },
+                    BackgroundColor(UiColors::frame_shell()),
+                ))
+                .with_children(|shell| {
+                    shell
+                        .spawn((
+                            Node {
+                                width: percent(100),
+                                height: px(40),
+                                padding: UiRect::axes(px(18), px(0)),
+                                align_items: AlignItems::Center,
+                                ..default()
+                            },
+                            BackgroundColor(UiColors::header()),
+                        ))
+                        .with_children(|header| {
+                            spawn_text_label(
+                                header,
+                                spec.title,
+                                UiFontSize::WINDOW_TITLE,
+                                UiColors::text_header(),
+                            );
+                        });
+
+                    shell.spawn((
+                        Node {
+                            width: percent(100),
+                            height: px(4),
+                            ..default()
+                        },
+                        BackgroundColor(UiColors::accent()),
+                    ));
+
+                    shell
+                        .spawn((
+                            Node {
+                                width: percent(100),
+                                flex_grow: 1.0,
+                                min_height: px(0),
+                                padding: UiRect::all(px(10)),
+                                flex_direction: FlexDirection::Column,
+                                row_gap: px(8),
+                                overflow: Overflow::clip_y(),
+                                ..default()
+                            },
+                            BackgroundColor(spec.body_color),
+                        ))
+                        .with_children(spawn_body);
+                });
+        });
+}
+
+pub(super) fn spawn_panel_section(
+    parent: &mut ChildSpawnerCommands,
     title: &'static str,
-    body_color: Color,
-    visibility: Visibility,
+    flex_grow: f32,
+    spawn_content: impl FnOnce(&mut ChildSpawnerCommands),
 ) {
-    spawn_panel_rect(
-        commands,
-        marker(),
-        center,
-        WIDE_PANEL_SIZE,
-        UiColors::frame_shadow(),
-        visibility,
-    );
-    spawn_panel_rect(
-        commands,
-        marker(),
-        center + Vec3::new(0.0, 0.0, 1.0),
-        Vec2::new(712.0, 528.0),
-        UiColors::frame_shell(),
-        visibility,
-    );
-    spawn_panel_rect(
-        commands,
-        marker(),
-        center + Vec3::new(0.0, -20.0, 2.0),
-        Vec2::new(696.0, 466.0),
-        body_color,
-        visibility,
-    );
-    spawn_panel_rect(
-        commands,
-        marker(),
-        center + Vec3::new(0.0, 238.0, 3.0),
-        Vec2::new(710.0, 40.0),
-        UiColors::header(),
-        visibility,
-    );
-    spawn_panel_rect(
-        commands,
-        marker(),
-        center + Vec3::new(0.0, 215.0, 4.0),
-        Vec2::new(710.0, 4.0),
-        UiColors::accent(),
-        visibility,
-    );
-    spawn_panel_label(
-        commands,
-        marker(),
-        title,
-        Vec3::new(
-            center.x - WIDE_PANEL_SIZE.x * 0.5 + 24.0,
-            center.y + 252.0,
-            center.z + 6.0,
-        ),
-        UiFontSize::WINDOW_TITLE,
-        UiColors::text_header(),
-        visibility,
-        Justify::Left,
-        Anchor::TOP_LEFT,
-    );
+    parent
+        .spawn((
+            Node {
+                width: percent(100),
+                flex_grow,
+                min_height: px(0),
+                padding: UiRect::all(px(8)),
+                flex_direction: FlexDirection::Column,
+                row_gap: px(6),
+                overflow: Overflow::clip_y(),
+                ..default()
+            },
+            BackgroundColor(UiColors::section()),
+        ))
+        .with_children(|section| {
+            if !title.is_empty() {
+                spawn_text_label(
+                    section,
+                    title,
+                    UiFontSize::SECTION_TITLE,
+                    UiColors::text_section(),
+                );
+            }
+            spawn_content(section);
+        });
 }
 
-pub(super) fn spawn_panel_rect<C: Component>(
-    commands: &mut Commands,
-    marker: C,
-    offset: Vec3,
-    size: Vec2,
-    color: Color,
-    visibility: Visibility,
-) {
-    commands.spawn((
-        Sprite::from_color(color, size),
-        Transform::from_translation(offset),
-        visibility,
-        ScreenFixed { offset },
-        marker,
-    ));
-}
-
-pub(super) fn spawn_panel_label<C: Component>(
-    commands: &mut Commands,
-    marker: C,
-    label: &'static str,
-    offset: Vec3,
+pub(super) fn spawn_text_label(
+    parent: &mut ChildSpawnerCommands,
+    label: impl Into<String>,
     font_size: f32,
     color: Color,
-    visibility: Visibility,
-    justify: Justify,
-    anchor: Anchor,
 ) {
-    commands.spawn((
-        Text2d::new(label),
+    parent.spawn((
+        Text::new(label.into()),
         TextFont {
             font_size,
             ..default()
         },
         TextColor(color),
-        TextLayout::new_with_justify(justify),
-        anchor,
-        Transform::from_translation(offset),
-        visibility,
-        ScreenFixed { offset },
-        marker,
+        TextLayout::new_with_justify(Justify::Left),
+        Label,
     ));
+}
+
+pub(super) fn action_button_node(size: Vec2) -> Node {
+    Node {
+        width: px(size.x),
+        height: px(size.y),
+        align_items: AlignItems::Center,
+        justify_content: JustifyContent::Center,
+        border: UiRect::all(px(2)),
+        ..default()
+    }
 }
 
 pub(super) fn action_button_color(enabled: bool, hovered: bool) -> Color {

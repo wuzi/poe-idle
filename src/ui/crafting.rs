@@ -1,5 +1,4 @@
 use bevy::prelude::*;
-use bevy::sprite::Anchor;
 
 use crate::components::{
     ActivePanel, CraftingAction, CraftingButton, CraftingButtonLabel, CraftingInfoText,
@@ -12,38 +11,24 @@ use crate::data::{
 };
 
 use super::theme::{
-    ACTION_BUTTON_SIZE, UiColors, UiFontSize, action_button_color, bounded_lines,
-    spawn_panel_label, spawn_panel_rect, spawn_wide_panel_chrome,
+    ACTION_BUTTON_SIZE, GRID_GAP, UiColors, UiFontSize, UiPanelSpec, WORKSPACE_PANEL_SIZE,
+    action_button_color, action_button_node, bounded_lines, spawn_panel_section,
+    spawn_panel_window,
 };
-use super::{item_location, spawn_inventory_cells, ui_position_from_screen_center};
+use super::{item_location, spawn_inventory_grid};
 
 fn spawn_crafting_button(
-    commands: &mut Commands,
+    parent: &mut ChildSpawnerCommands,
     action: CraftingAction,
     label: &'static str,
-    offset: Vec3,
 ) {
     let size = ACTION_BUTTON_SIZE;
-    let (left, top) = ui_position_from_screen_center(offset.truncate(), size);
-    commands
+    parent
         .spawn((
             Button,
-            Node {
-                position_type: PositionType::Absolute,
-                left: px(left),
-                top: px(top),
-                width: px(size.x),
-                height: px(size.y),
-                align_items: AlignItems::Center,
-                justify_content: JustifyContent::Center,
-                border: UiRect::all(px(2)),
-                ..default()
-            },
+            action_button_node(size),
             BorderColor::all(UiColors::accent()),
             BackgroundColor(action_button_color(false, false)),
-            Visibility::Hidden,
-            ZIndex(22),
-            CraftingPanelPiece,
             CraftingButton { action },
         ))
         .with_children(|parent| {
@@ -54,16 +39,14 @@ fn spawn_crafting_button(
                     ..default()
                 },
                 TextColor(UiColors::text_section()),
-                CraftingPanelPiece,
                 CraftingButtonLabel { action },
                 Label,
             ));
         });
 }
 
-fn spawn_crafting_info_text(commands: &mut Commands, offset: Vec3) {
-    let (left, top) = ui_position_from_screen_center(offset.truncate(), Vec2::new(230.0, 74.0));
-    commands.spawn((
+fn spawn_crafting_info_text(parent: &mut ChildSpawnerCommands) {
+    parent.spawn((
         Text::new(""),
         TextFont {
             font_size: UiFontSize::BODY_SMALL,
@@ -72,138 +55,114 @@ fn spawn_crafting_info_text(commands: &mut Commands, offset: Vec3) {
         TextColor(UiColors::text_muted()),
         TextLayout::new_with_justify(Justify::Left),
         Node {
-            position_type: PositionType::Absolute,
-            left: px(left),
-            top: px(top),
-            width: px(230.0),
-            height: px(74.0),
+            width: percent(100),
+            min_height: px(74),
             overflow: Overflow::clip_y(),
             ..default()
         },
-        Visibility::Hidden,
-        ZIndex(22),
-        CraftingPanelPiece,
         CraftingInfoText,
         Label,
     ));
 }
 
 pub(super) fn spawn_crafting_panel(commands: &mut Commands) {
-    let center = Vec3::new(-150.0, 90.0, 42.0);
-    spawn_wide_panel_chrome(
-        commands,
-        || CraftingPanelPiece,
-        center,
-        "CRAFTING",
-        UiColors::frame_body(),
-        Visibility::Hidden,
-    );
-    spawn_crafting_panel_rect(
-        commands,
-        Vec3::new(-142.0, 70.0, 46.0),
-        Vec2::new(3.0, 430.0),
-        UiColors::divider(),
-    );
-    spawn_crafting_panel_label(
-        commands,
-        "STASH",
-        Vec3::new(-500.0, 280.0, 48.0),
-        14.0,
-        UiColors::text_section(),
-    );
-    spawn_inventory_cells(
-        commands,
-        ActivePanel::Crafting,
-        InventorySource::Stash,
-        -496.0,
-        240.0,
-        6,
-        5,
-        46.0,
-    );
-    spawn_crafting_panel_label(
-        commands,
-        "INVENTORY",
-        Vec3::new(-500.0, 20.0, 48.0),
-        14.0,
-        UiColors::text_section(),
-    );
-    spawn_inventory_cells(
-        commands,
-        ActivePanel::Crafting,
-        InventorySource::Inventory,
-        -496.0,
-        -18.0,
-        6,
-        4,
-        46.0,
-    );
-    spawn_crafting_panel_label(
-        commands,
-        "RARITY UPGRADE",
-        Vec3::new(-110.0, 240.0, 48.0),
-        16.0,
-        UiColors::text_section(),
-    );
-    spawn_crafting_panel_rect(
-        commands,
-        Vec3::new(34.0, 160.0, 46.0),
-        Vec2::new(312.0, 128.0),
-        UiColors::section(),
-    );
-    spawn_inventory_cells(
-        commands,
-        ActivePanel::Crafting,
-        InventorySource::Crafting,
-        -92.0,
-        182.0,
-        CRAFTING_SLOT_COUNT,
-        1,
-        46.0,
-    );
-    spawn_crafting_button(
-        commands,
-        CraftingAction::RarityUpgrade,
-        "CRAFT",
-        Vec3::new(-36.0, 120.0, 48.0),
-    );
-    spawn_crafting_button(
-        commands,
-        CraftingAction::Liquidate,
-        "LIQUIDATE",
-        Vec3::new(106.0, 120.0, 48.0),
-    );
-    spawn_crafting_info_text(commands, Vec3::new(-108.0, 82.0, 48.0));
-}
-
-fn spawn_crafting_panel_rect(commands: &mut Commands, offset: Vec3, size: Vec2, color: Color) {
-    spawn_panel_rect(
+    spawn_panel_window(
         commands,
         CraftingPanelPiece,
-        offset,
-        size,
-        color,
-        Visibility::Hidden,
-    );
-}
+        UiPanelSpec {
+            left: 12.0,
+            top: 17.0,
+            size: WORKSPACE_PANEL_SIZE,
+            title: "CRAFTING",
+            body_color: UiColors::frame_body(),
+            visibility: Visibility::Hidden,
+            z_index: 12,
+        },
+        |body| {
+            body.spawn((Node {
+                width: percent(100),
+                height: percent(100),
+                flex_direction: FlexDirection::Row,
+                column_gap: px(10),
+                ..default()
+            },))
+                .with_children(|layout| {
+                    layout
+                        .spawn((Node {
+                            width: px(292),
+                            height: percent(100),
+                            flex_direction: FlexDirection::Column,
+                            row_gap: px(8),
+                            ..default()
+                        },))
+                        .with_children(|sources| {
+                            spawn_panel_section(sources, "Stash", 1.12, |section| {
+                                spawn_inventory_grid(
+                                    section,
+                                    ActivePanel::Crafting,
+                                    InventorySource::Stash,
+                                    6,
+                                    5,
+                                    4.0,
+                                );
+                            });
+                            spawn_panel_section(sources, "Inventory", 0.9, |section| {
+                                spawn_inventory_grid(
+                                    section,
+                                    ActivePanel::Crafting,
+                                    InventorySource::Inventory,
+                                    6,
+                                    4,
+                                    4.0,
+                                );
+                            });
+                        });
 
-fn spawn_crafting_panel_label(
-    commands: &mut Commands,
-    label: &'static str,
-    offset: Vec3,
-    font_size: f32,
-    color: Color,
-) {
-    spawn_panel_label(
-        commands,
-        CraftingPanelPiece,
-        label,
-        offset,
-        font_size,
-        color,
-        Visibility::Hidden,
-        Justify::Left,
-        Anchor::TOP_LEFT,
+                    layout
+                        .spawn((Node {
+                            flex_grow: 1.0,
+                            height: percent(100),
+                            flex_direction: FlexDirection::Column,
+                            row_gap: px(8),
+                            ..default()
+                        },))
+                        .with_children(|workbench| {
+                            spawn_panel_section(workbench, "Rarity Forge", 0.7, |section| {
+                                spawn_inventory_grid(
+                                    section,
+                                    ActivePanel::Crafting,
+                                    InventorySource::Crafting,
+                                    CRAFTING_SLOT_COUNT,
+                                    1,
+                                    GRID_GAP,
+                                );
+                            });
+
+                            spawn_panel_section(workbench, "Actions", 0.55, |section| {
+                                section
+                                    .spawn((Node {
+                                        width: percent(100),
+                                        flex_direction: FlexDirection::Row,
+                                        column_gap: px(8),
+                                        ..default()
+                                    },))
+                                    .with_children(|actions| {
+                                        spawn_crafting_button(
+                                            actions,
+                                            CraftingAction::RarityUpgrade,
+                                            "CRAFT",
+                                        );
+                                        spawn_crafting_button(
+                                            actions,
+                                            CraftingAction::Liquidate,
+                                            "LIQUIDATE",
+                                        );
+                                    });
+                                spawn_crafting_info_text(section);
+                            });
+                        });
+                });
+        },
     );
 }
 
@@ -255,10 +214,7 @@ pub(crate) fn sync_crafting_panel(
     ui_state: Res<UiState>,
     profile: Res<PlayerProfile>,
     mut visibility_query: Query<&mut Visibility, With<CraftingPanelPiece>>,
-    mut button_query: Query<
-        (&CraftingButton, &Interaction, &mut BackgroundColor),
-        (With<Button>, Without<Sprite>),
-    >,
+    mut button_query: Query<(&CraftingButton, &Interaction, &mut BackgroundColor), With<Button>>,
     mut label_query: Query<(&CraftingButtonLabel, &mut TextColor)>,
     mut info_query: Query<&mut Text, With<CraftingInfoText>>,
 ) {

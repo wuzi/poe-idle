@@ -1,176 +1,286 @@
 use bevy::prelude::*;
-use bevy::sprite::Anchor;
 
 use crate::components::{
-    ActivePanel, ScreenFixed, TalentConnector, TalentHeaderText, TalentInfoText, TalentNodeButton,
+    ActivePanel, TalentConnector, TalentHeaderText, TalentInfoText, TalentNodeButton,
     TalentNodeLabel, TalentPanelPiece, TalentResetButton, TalentResetLabel, UiState,
 };
 use crate::data::{GameDatabase, PlayerProfile, TalentNode};
 
-use super::cursor_offset;
 use super::theme::{
-    UiColors, action_button_color, bounded_lines, spawn_panel_rect, spawn_wide_panel_chrome,
-    truncate_chars,
+    UiColors, UiFontSize, UiPanelSpec, WORKSPACE_PANEL_SIZE, action_button_color,
+    action_button_node, bounded_lines, spawn_panel_window, spawn_text_label, truncate_chars,
 };
 
-const TALENT_NODE_SIZE: f32 = 34.0;
+const TALENT_CANVAS_WIDTH: f32 = 470.0;
+const TALENT_CANVAS_HEIGHT: f32 = 390.0;
+const TALENT_CANVAS_MIN_X: f32 = -485.0;
+const TALENT_CANVAS_MAX_Y: f32 = 270.0;
+const TALENT_NODE_SIZE: Vec2 = Vec2::new(70.0, 52.0);
+const TALENT_CONNECTOR_THICKNESS: f32 = 4.0;
 
 pub(super) fn spawn_talent_panel(commands: &mut Commands, talents: &[TalentNode]) {
-    let center = Vec3::new(-150.0, 90.0, 44.0);
-    spawn_wide_panel_chrome(
-        commands,
-        || TalentPanelPiece,
-        center,
-        "TALENTS",
-        UiColors::frame_body_cool(),
-        Visibility::Hidden,
-    );
-    spawn_talent_rect(
-        commands,
-        Vec3::new(8.0, 78.0, 47.0),
-        Vec2::new(3.0, 430.0),
-        UiColors::divider(),
-    );
-    spawn_talent_dynamic(
-        commands,
-        TalentHeaderText,
-        Vec3::new(70.0, 250.0, 48.0),
-        14.0,
-        UiColors::text_section(),
-    );
-    spawn_talent_dynamic(
-        commands,
-        TalentInfoText,
-        Vec3::new(24.0, 150.0, 48.0),
-        13.0,
-        UiColors::text_primary(),
-    );
-    spawn_talent_reset_button(commands, Vec3::new(110.0, -120.0, 48.0));
-
-    for (index, node) in talents.iter().enumerate() {
-        if let Some(req) = node.requires {
-            spawn_talent_connector(commands, index, talents[req].position, node.position);
-        }
-    }
-    for (index, node) in talents.iter().enumerate() {
-        spawn_talent_node(commands, index, node);
-    }
-}
-
-fn spawn_talent_rect(commands: &mut Commands, offset: Vec3, size: Vec2, color: Color) {
-    spawn_panel_rect(
+    spawn_panel_window(
         commands,
         TalentPanelPiece,
-        offset,
-        size,
-        color,
-        Visibility::Hidden,
+        UiPanelSpec {
+            left: 12.0,
+            top: 17.0,
+            size: WORKSPACE_PANEL_SIZE,
+            title: "TALENTS",
+            body_color: UiColors::frame_body_cool(),
+            visibility: Visibility::Hidden,
+            z_index: 12,
+        },
+        |body| {
+            body.spawn((Node {
+                width: percent(100),
+                height: percent(100),
+                flex_direction: FlexDirection::Row,
+                column_gap: px(10),
+                ..default()
+            },))
+                .with_children(|layout| {
+                    layout
+                        .spawn((
+                            Node {
+                                width: px(492),
+                                height: percent(100),
+                                padding: UiRect::all(px(8)),
+                                flex_direction: FlexDirection::Column,
+                                row_gap: px(6),
+                                overflow: Overflow::clip_y(),
+                                ..default()
+                            },
+                            BackgroundColor(UiColors::section()),
+                        ))
+                        .with_children(|tree| {
+                            spawn_text_label(
+                                tree,
+                                "Class Tree",
+                                UiFontSize::SECTION_TITLE,
+                                UiColors::text_section(),
+                            );
+                            tree.spawn((
+                                Node {
+                                    width: px(TALENT_CANVAS_WIDTH),
+                                    height: px(TALENT_CANVAS_HEIGHT),
+                                    position_type: PositionType::Relative,
+                                    ..default()
+                                },
+                                BackgroundColor(Color::srgba(0.055, 0.06, 0.072, 0.88)),
+                            ))
+                            .with_children(|canvas| {
+                                for (index, node) in talents.iter().enumerate() {
+                                    if let Some(required_index) = node.requires {
+                                        spawn_talent_connector(
+                                            canvas,
+                                            index,
+                                            talents[required_index].position,
+                                            node.position,
+                                        );
+                                    }
+                                }
+                                for (index, node) in talents.iter().enumerate() {
+                                    spawn_talent_node(canvas, index, node);
+                                }
+                            });
+                        });
+
+                    layout
+                        .spawn((Node {
+                            flex_grow: 1.0,
+                            height: percent(100),
+                            flex_direction: FlexDirection::Column,
+                            row_gap: px(8),
+                            ..default()
+                        },))
+                        .with_children(|details| {
+                            details
+                                .spawn((
+                                    Node {
+                                        width: percent(100),
+                                        padding: UiRect::all(px(8)),
+                                        flex_direction: FlexDirection::Column,
+                                        row_gap: px(6),
+                                        ..default()
+                                    },
+                                    BackgroundColor(UiColors::section()),
+                                ))
+                                .with_children(|summary| {
+                                    spawn_text_label(
+                                        summary,
+                                        "Progress",
+                                        UiFontSize::SECTION_TITLE,
+                                        UiColors::text_section(),
+                                    );
+                                    summary.spawn((
+                                        Text::new(""),
+                                        TextFont {
+                                            font_size: UiFontSize::BODY,
+                                            ..default()
+                                        },
+                                        TextColor(UiColors::text_primary()),
+                                        TextLayout::new_with_justify(Justify::Left),
+                                        TalentHeaderText,
+                                        Label,
+                                    ));
+                                });
+
+                            details
+                                .spawn((
+                                    Node {
+                                        width: percent(100),
+                                        flex_grow: 1.0,
+                                        min_height: px(0),
+                                        padding: UiRect::all(px(8)),
+                                        flex_direction: FlexDirection::Column,
+                                        row_gap: px(6),
+                                        overflow: Overflow::clip_y(),
+                                        ..default()
+                                    },
+                                    BackgroundColor(UiColors::section()),
+                                ))
+                                .with_children(|info| {
+                                    spawn_text_label(
+                                        info,
+                                        "Selected Talent",
+                                        UiFontSize::SECTION_TITLE,
+                                        UiColors::text_section(),
+                                    );
+                                    info.spawn((
+                                        Text::new(""),
+                                        TextFont {
+                                            font_size: UiFontSize::BODY,
+                                            ..default()
+                                        },
+                                        TextColor(UiColors::text_primary()),
+                                        TextLayout::new_with_justify(Justify::Left),
+                                        Node {
+                                            width: percent(100),
+                                            ..default()
+                                        },
+                                        TalentInfoText,
+                                        Label,
+                                    ));
+                                });
+
+                            details
+                                .spawn((
+                                    Button,
+                                    action_button_node(Vec2::new(150.0, 34.0)),
+                                    BorderColor::all(UiColors::accent()),
+                                    BackgroundColor(action_button_color(false, false)),
+                                    TalentResetButton,
+                                ))
+                                .with_children(|button| {
+                                    button.spawn((
+                                        Text::new("RESET ALL"),
+                                        TextFont {
+                                            font_size: UiFontSize::BUTTON,
+                                            ..default()
+                                        },
+                                        TextColor(UiColors::text_section()),
+                                        TalentResetLabel,
+                                        Label,
+                                    ));
+                                });
+                        });
+                });
+        },
     );
 }
 
-fn spawn_talent_dynamic<C: Component>(
-    commands: &mut Commands,
-    marker: C,
-    offset: Vec3,
-    font_size: f32,
-    color: Color,
+fn spawn_talent_connector(
+    parent: &mut ChildSpawnerCommands,
+    node_index: usize,
+    from: Vec2,
+    to: Vec2,
 ) {
-    commands.spawn((
-        Text2d::new(""),
-        TextFont {
-            font_size,
+    let from = talent_canvas_position(from);
+    let to = talent_canvas_position(to);
+    let elbow_y = (from.y + to.y) * 0.5;
+
+    spawn_talent_connector_segment(parent, node_index, from, Vec2::new(from.x, elbow_y));
+    spawn_talent_connector_segment(
+        parent,
+        node_index,
+        Vec2::new(from.x, elbow_y),
+        Vec2::new(to.x, elbow_y),
+    );
+    spawn_talent_connector_segment(parent, node_index, Vec2::new(to.x, elbow_y), to);
+}
+
+fn spawn_talent_connector_segment(
+    parent: &mut ChildSpawnerCommands,
+    node_index: usize,
+    from: Vec2,
+    to: Vec2,
+) {
+    let thickness = TALENT_CONNECTOR_THICKNESS;
+    let left = from.x.min(to.x) - thickness * 0.5;
+    let top = from.y.min(to.y) - thickness * 0.5;
+    let width = (from.x - to.x).abs().max(thickness);
+    let height = (from.y - to.y).abs().max(thickness);
+
+    parent.spawn((
+        Node {
+            position_type: PositionType::Absolute,
+            left: px(left),
+            top: px(top),
+            width: px(width),
+            height: px(height),
             ..default()
         },
-        TextColor(color),
-        TextLayout::new_with_justify(Justify::Left),
-        Anchor::TOP_LEFT,
-        Transform::from_translation(offset),
-        Visibility::Hidden,
-        ScreenFixed { offset },
-        TalentPanelPiece,
-        marker,
-    ));
-}
-
-fn spawn_talent_connector(commands: &mut Commands, node_index: usize, from: Vec2, to: Vec2) {
-    let mid = (from + to) * 0.5;
-    let delta = to - from;
-    let length = delta.length().max(1.0);
-    let angle = delta.y.atan2(delta.x);
-    let offset = Vec3::new(mid.x, mid.y, 45.0);
-    commands.spawn((
-        Sprite::from_color(Color::srgba(0.28, 0.26, 0.24, 0.9), Vec2::new(length, 4.0)),
-        Transform::from_translation(offset).with_rotation(Quat::from_rotation_z(angle)),
-        Visibility::Hidden,
-        ScreenFixed { offset },
-        TalentPanelPiece,
+        BackgroundColor(Color::srgba(0.22, 0.22, 0.22, 0.92)),
         TalentConnector { node: node_index },
     ));
 }
 
-fn spawn_talent_node(commands: &mut Commands, index: usize, node: &TalentNode) {
-    let offset = Vec3::new(node.position.x, node.position.y, 46.0);
-    commands.spawn((
-        Sprite::from_color(Color::srgb(0.20, 0.19, 0.18), Vec2::splat(TALENT_NODE_SIZE)),
-        Transform::from_translation(offset),
-        Visibility::Hidden,
-        ScreenFixed { offset },
-        TalentPanelPiece,
-        TalentNodeButton {
-            index,
-            size: Vec2::splat(TALENT_NODE_SIZE),
-        },
-    ));
-
-    let label_offset = Vec3::new(node.position.x, node.position.y - 20.0, 48.0);
-    commands.spawn((
-        Text2d::new(""),
-        TextFont {
-            font_size: 8.5,
-            ..default()
-        },
-        TextColor(Color::srgb(0.85, 0.83, 0.76)),
-        TextLayout::new_with_justify(Justify::Center),
-        Anchor::TOP_CENTER,
-        Transform::from_translation(label_offset),
-        Visibility::Hidden,
-        ScreenFixed {
-            offset: label_offset,
-        },
-        TalentPanelPiece,
-        TalentNodeLabel { index },
-    ));
+fn spawn_talent_node(parent: &mut ChildSpawnerCommands, index: usize, node: &TalentNode) {
+    let center = talent_canvas_position(node.position);
+    parent
+        .spawn((
+            Button,
+            Node {
+                position_type: PositionType::Absolute,
+                left: px(center.x - TALENT_NODE_SIZE.x * 0.5),
+                top: px(center.y - TALENT_NODE_SIZE.y * 0.5),
+                width: px(TALENT_NODE_SIZE.x),
+                height: px(TALENT_NODE_SIZE.y),
+                padding: UiRect::all(px(4)),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Center,
+                border: UiRect::all(px(2)),
+                ..default()
+            },
+            BorderColor::all(Color::srgba(0.36, 0.31, 0.22, 0.78)),
+            BackgroundColor(Color::srgb(0.20, 0.19, 0.18)),
+            TalentNodeButton { index },
+        ))
+        .with_children(|button| {
+            button.spawn((
+                Text::new(""),
+                TextFont {
+                    font_size: 8.5,
+                    ..default()
+                },
+                TextColor(Color::srgb(0.85, 0.83, 0.76)),
+                TextLayout::new_with_justify(Justify::Center),
+                Node {
+                    width: percent(100),
+                    ..default()
+                },
+                TalentNodeLabel { index },
+                Label,
+            ));
+        });
 }
 
-fn spawn_talent_reset_button(commands: &mut Commands, offset: Vec3) {
-    let size = Vec2::new(150.0, 32.0);
-    commands.spawn((
-        Sprite::from_color(action_button_color(true, false), size),
-        Transform::from_translation(offset),
-        Visibility::Hidden,
-        ScreenFixed { offset },
-        TalentPanelPiece,
-        TalentResetButton { size },
-    ));
-
-    let text_offset = offset + Vec3::new(0.0, 6.0, 1.0);
-    commands.spawn((
-        Text2d::new("RESET ALL"),
-        TextFont {
-            font_size: 13.0,
-            ..default()
-        },
-        TextColor(UiColors::text_section()),
-        TextLayout::new_with_justify(Justify::Center),
-        Anchor::CENTER,
-        Transform::from_translation(text_offset),
-        Visibility::Hidden,
-        ScreenFixed {
-            offset: text_offset,
-        },
-        TalentPanelPiece,
-        TalentResetLabel,
-    ));
+fn talent_canvas_position(position: Vec2) -> Vec2 {
+    Vec2::new(
+        position.x - TALENT_CANVAS_MIN_X,
+        TALENT_CANVAS_MAX_Y - position.y,
+    )
 }
 
 pub(crate) fn handle_talent_panel(
@@ -178,9 +288,8 @@ pub(crate) fn handle_talent_panel(
     database: Res<GameDatabase>,
     mut profile: ResMut<PlayerProfile>,
     mouse: Res<ButtonInput<MouseButton>>,
-    window_query: Query<&Window>,
-    node_query: Query<(&TalentNodeButton, &ScreenFixed)>,
-    reset_query: Query<(&TalentResetButton, &ScreenFixed)>,
+    node_query: Query<(&TalentNodeButton, &Interaction), With<Button>>,
+    reset_query: Query<(&TalentResetButton, &Interaction), With<Button>>,
 ) {
     if ui_state.active_panel != ActivePanel::Talents {
         ui_state.hovered_talent = None;
@@ -188,20 +297,8 @@ pub(crate) fn handle_talent_panel(
     }
     profile.ensure_talent_slots(&database);
 
-    let Some(cursor) = cursor_offset(&window_query) else {
-        ui_state.hovered_talent = None;
-        return;
-    };
-
-    let hovered = node_query.iter().find_map(|(button, fixed)| {
-        let half = button.size * 0.5;
-        if (cursor.x - fixed.offset.x).abs() <= half.x
-            && (cursor.y - fixed.offset.y).abs() <= half.y
-        {
-            Some(button.index)
-        } else {
-            None
-        }
+    let hovered = node_query.iter().find_map(|(button, interaction)| {
+        matches!(*interaction, Interaction::Hovered | Interaction::Pressed).then_some(button.index)
     });
     ui_state.hovered_talent = hovered;
 
@@ -214,15 +311,12 @@ pub(crate) fn handle_talent_panel(
         return;
     }
 
-    if mouse.just_pressed(MouseButton::Left) {
-        let on_reset = reset_query.iter().any(|(button, fixed)| {
-            let half = button.size * 0.5;
-            (cursor.x - fixed.offset.x).abs() <= half.x
-                && (cursor.y - fixed.offset.y).abs() <= half.y
-        });
-        if on_reset {
-            profile.reset_talents();
-        }
+    if mouse.just_pressed(MouseButton::Left)
+        && reset_query.iter().any(|(_button, interaction)| {
+            matches!(*interaction, Interaction::Hovered | Interaction::Pressed)
+        })
+    {
+        profile.reset_talents();
     }
 }
 
@@ -231,26 +325,65 @@ pub(crate) fn sync_talent_panel(
     profile: Res<PlayerProfile>,
     ui_state: Res<UiState>,
     mut piece_query: Query<&mut Visibility, With<TalentPanelPiece>>,
-    mut node_query: Query<(&TalentNodeButton, &mut Sprite), Without<TalentConnector>>,
-    mut connector_query: Query<(&TalentConnector, &mut Sprite), Without<TalentNodeButton>>,
+    mut node_query: Query<
+        (
+            &TalentNodeButton,
+            &Interaction,
+            &mut BackgroundColor,
+            &mut BorderColor,
+        ),
+        (
+            With<Button>,
+            Without<TalentConnector>,
+            Without<TalentResetButton>,
+        ),
+    >,
+    mut connector_query: Query<
+        (&TalentConnector, &mut BackgroundColor),
+        (Without<TalentNodeButton>, Without<TalentResetButton>),
+    >,
     mut node_label_query: Query<
-        (&TalentNodeLabel, &mut Text2d),
-        (Without<TalentHeaderText>, Without<TalentInfoText>),
+        (&TalentNodeLabel, &mut Text, &mut TextColor),
+        (
+            Without<TalentHeaderText>,
+            Without<TalentInfoText>,
+            Without<TalentResetLabel>,
+        ),
     >,
     mut header_query: Query<
-        &mut Text2d,
+        &mut Text,
         (
             With<TalentHeaderText>,
             Without<TalentNodeLabel>,
             Without<TalentInfoText>,
+            Without<TalentResetLabel>,
         ),
     >,
     mut info_query: Query<
-        &mut Text2d,
+        &mut Text,
         (
             With<TalentInfoText>,
             Without<TalentNodeLabel>,
             Without<TalentHeaderText>,
+            Without<TalentResetLabel>,
+        ),
+    >,
+    mut reset_button_query: Query<
+        (&Interaction, &mut BackgroundColor),
+        (
+            With<TalentResetButton>,
+            With<Button>,
+            Without<TalentNodeButton>,
+            Without<TalentConnector>,
+        ),
+    >,
+    mut reset_label_query: Query<
+        &mut TextColor,
+        (
+            With<TalentResetLabel>,
+            Without<TalentNodeLabel>,
+            Without<TalentHeaderText>,
+            Without<TalentInfoText>,
         ),
     >,
 ) {
@@ -269,46 +402,57 @@ pub(crate) fn sync_talent_panel(
 
     let tree = profile.talent_tree(&database);
 
-    for (button, mut sprite) in &mut node_query {
+    for (button, interaction, mut background, mut border) in &mut node_query {
         let index = button.index;
         let Some(node) = tree.get(index) else {
             continue;
         };
         let points = profile.talent_points_in(index);
-        sprite.color = if points >= node.max_points {
-            Color::srgb(0.96, 0.58, 0.12)
+        let hovered = matches!(*interaction, Interaction::Hovered | Interaction::Pressed);
+        background.0 = talent_node_color(
+            points,
+            node.max_points,
+            profile.can_allocate_talent(&database, index),
+            hovered,
+        );
+        border.set_all(if hovered {
+            UiColors::accent()
         } else if points > 0 {
-            Color::srgb(0.82, 0.66, 0.24)
-        } else if profile.can_allocate_talent(&database, index) {
-            Color::srgb(0.28, 0.46, 0.56)
+            Color::srgba(0.94, 0.66, 0.22, 0.9)
         } else {
-            Color::srgb(0.20, 0.19, 0.18)
-        };
+            Color::srgba(0.36, 0.31, 0.22, 0.78)
+        });
     }
 
-    for (connector, mut sprite) in &mut connector_query {
-        sprite.color = if profile.talent_points_in(connector.node) > 0 {
+    for (connector, mut background) in &mut connector_query {
+        background.0 = if profile.talent_points_in(connector.node) > 0 {
             Color::srgba(0.96, 0.58, 0.12, 0.95)
         } else {
-            Color::srgba(0.28, 0.26, 0.24, 0.9)
+            Color::srgba(0.22, 0.22, 0.22, 0.92)
         };
     }
 
-    for (label, mut text) in &mut node_label_query {
+    for (label, mut text, mut text_color) in &mut node_label_query {
         let index = label.index;
         if let Some(node) = tree.get(index) {
+            let points = profile.talent_points_in(index);
             text.0 = format!(
                 "{}\n{}/{}",
-                truncate_chars(node.name, 16),
-                profile.talent_points_in(index),
+                truncate_chars(node.name, 13),
+                points,
                 node.max_points
             );
+            text_color.0 = if points > 0 {
+                UiColors::text_dark()
+            } else {
+                Color::srgb(0.85, 0.83, 0.76)
+            };
         }
     }
 
     for mut text in &mut header_query {
         text.0 = format!(
-            "Points {}   Spent {}/{}",
+            "Available {}\nSpent {}/{}",
             profile.available_talent_points(),
             profile.spent_talent_points(),
             profile.total_talent_points(),
@@ -317,7 +461,41 @@ pub(crate) fn sync_talent_panel(
 
     for mut text in &mut info_query {
         let info = talent_info_text(&profile, &database, ui_state.hovered_talent);
-        text.0 = bounded_lines(info.lines().map(|line| line.to_string()), 28, 13);
+        text.0 = bounded_lines(info.lines().map(|line| line.to_string()), 30, 14);
+    }
+
+    let reset_enabled = profile.spent_talent_points() > 0;
+    for (interaction, mut background) in &mut reset_button_query {
+        let hovered = matches!(*interaction, Interaction::Hovered | Interaction::Pressed);
+        background.0 = action_button_color(reset_enabled, hovered);
+    }
+
+    for mut text_color in &mut reset_label_query {
+        text_color.0 = if reset_enabled {
+            UiColors::text_section()
+        } else {
+            Color::srgba(0.64, 0.58, 0.48, 0.78)
+        };
+    }
+}
+
+fn talent_node_color(points: u8, max_points: u8, can_allocate: bool, hovered: bool) -> Color {
+    if points >= max_points && hovered {
+        Color::srgba(0.98, 0.64, 0.16, 0.98)
+    } else if points >= max_points {
+        Color::srgb(0.96, 0.58, 0.12)
+    } else if points > 0 && hovered {
+        Color::srgba(0.92, 0.72, 0.28, 0.98)
+    } else if points > 0 {
+        Color::srgb(0.82, 0.66, 0.24)
+    } else if can_allocate && hovered {
+        Color::srgba(0.42, 0.60, 0.66, 0.98)
+    } else if can_allocate {
+        Color::srgb(0.28, 0.46, 0.56)
+    } else if hovered {
+        Color::srgba(0.27, 0.25, 0.23, 0.98)
+    } else {
+        Color::srgb(0.20, 0.19, 0.18)
     }
 }
 
@@ -328,7 +506,7 @@ fn talent_info_text(
 ) -> String {
     let tree = profile.talent_tree(database);
     let Some(index) = hovered.filter(|index| *index < tree.len()) else {
-        return "Hover a talent to\ninspect it.\n\nLeft Click  allocate\nRight Click  refund\n\nReassign freely,\nno cost, anytime."
+        return "No talent selected.\n\nRanks can be reassigned freely at any time.\n\nUnlocked nodes brighten as their requirements are met."
             .to_string();
     };
 
@@ -349,7 +527,7 @@ fn talent_info_text(
         let met = profile.talent_points_in(req) > 0;
         lines.push(String::new());
         lines.push(format!(
-            "Needs: {}{}",
+            "Requires: {}{}",
             tree[req].name,
             if met { " [met]" } else { " [locked]" }
         ));
@@ -358,7 +536,7 @@ fn talent_info_text(
 }
 
 fn wrap_talent_line(line: &str) -> Vec<String> {
-    const WRAP: usize = 26;
+    const WRAP: usize = 28;
     let mut out = Vec::new();
     let mut current = String::new();
     for word in line.split_whitespace() {
