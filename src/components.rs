@@ -193,6 +193,12 @@ pub(crate) enum CharacterPanelText {
 }
 
 #[derive(Component)]
+pub(crate) struct HeroXpBarFill;
+
+#[derive(Component)]
+pub(crate) struct HeroXpBarText;
+
+#[derive(Component)]
 pub(crate) struct InventoryCell {
     pub(crate) panel: ActivePanel,
     pub(crate) source: InventorySource,
