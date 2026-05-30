@@ -283,15 +283,13 @@ pub(crate) fn sync_progress_bar(
     database: Res<GameDatabase>,
     run: Res<RunState>,
     player_query: Query<&Transform, (With<Player>, Without<ProgressBarFill>)>,
-    mut query: Query<
+    mut sprite_query: Query<
         (&mut Sprite, &mut Transform, &mut ScreenFixed),
-        (With<ProgressBarFill>, Without<Player>),
+        (With<ProgressBarFill>, Without<Player>, Without<Node>),
     >,
+    mut ui_query: Query<&mut Node, (With<ProgressBarFill>, Without<Sprite>)>,
 ) {
     let Ok(player_transform) = player_query.single() else {
-        return;
-    };
-    let Ok((mut sprite, mut transform, mut fixed)) = query.single_mut() else {
         return;
     };
 
@@ -306,8 +304,15 @@ pub(crate) fn sync_progress_bar(
     };
     let progress = travel_progress.max(kill_progress).clamp(0.0, 1.0);
     let width = MAP_PROGRESS_WIDTH * progress;
-    sprite.custom_size = Some(Vec2::new(width.max(1.0), 12.0));
-    let camera_x = transform.translation.x - fixed.offset.x;
-    fixed.offset.x = MAP_PROGRESS_LEFT + width * 0.5;
-    transform.translation.x = camera_x + fixed.offset.x;
+
+    for (mut sprite, mut transform, mut fixed) in &mut sprite_query {
+        sprite.custom_size = Some(Vec2::new(width.max(1.0), 12.0));
+        let camera_x = transform.translation.x - fixed.offset.x;
+        fixed.offset.x = MAP_PROGRESS_LEFT + width * 0.5;
+        transform.translation.x = camera_x + fixed.offset.x;
+    }
+
+    for mut node in &mut ui_query {
+        node.width = px(width.max(1.0));
+    }
 }

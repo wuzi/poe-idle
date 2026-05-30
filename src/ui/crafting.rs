@@ -11,6 +11,10 @@ use crate::data::{
     LiquidationResult, LootRng, PlayerProfile, describe_item,
 };
 
+use super::theme::{
+    ACTION_BUTTON_SIZE, UiColors, UiFontSize, action_button_color, bounded_lines,
+    spawn_panel_label, spawn_panel_rect, spawn_wide_panel_chrome,
+};
 use super::{cursor_offset, item_location, spawn_inventory_cells};
 
 fn spawn_crafting_button(
@@ -19,9 +23,9 @@ fn spawn_crafting_button(
     label: &'static str,
     offset: Vec3,
 ) {
-    let size = Vec2::new(112.0, 34.0);
+    let size = ACTION_BUTTON_SIZE;
     commands.spawn((
-        Sprite::from_color(Color::srgba(0.30, 0.11, 0.04, 0.98), size),
+        Sprite::from_color(action_button_color(false, false), size),
         Transform::from_translation(offset),
         Visibility::Hidden,
         ScreenFixed { offset },
@@ -33,10 +37,10 @@ fn spawn_crafting_button(
     commands.spawn((
         Text2d::new(label),
         TextFont {
-            font_size: 12.0,
+            font_size: UiFontSize::BUTTON,
             ..default()
         },
-        TextColor(Color::srgb(0.96, 0.70, 0.32)),
+        TextColor(UiColors::text_section()),
         TextLayout::new_with_justify(Justify::Center),
         Anchor::CENTER,
         Transform::from_translation(text_offset),
@@ -53,10 +57,10 @@ fn spawn_crafting_info_text(commands: &mut Commands, offset: Vec3) {
     commands.spawn((
         Text2d::new(""),
         TextFont {
-            font_size: 10.5,
+            font_size: UiFontSize::BODY_SMALL,
             ..default()
         },
-        TextColor(Color::srgb(0.78, 0.72, 0.62)),
+        TextColor(UiColors::text_muted()),
         TextLayout::new_with_justify(Justify::Left),
         Anchor::TOP_LEFT,
         Transform::from_translation(offset),
@@ -68,55 +72,27 @@ fn spawn_crafting_info_text(commands: &mut Commands, offset: Vec3) {
 }
 
 pub(super) fn spawn_crafting_panel(commands: &mut Commands) {
-    spawn_crafting_panel_rect(
+    let center = Vec3::new(-150.0, 90.0, 42.0);
+    spawn_wide_panel_chrome(
         commands,
-        Vec3::new(-150.0, 90.0, 42.0),
-        Vec2::new(724.0, 540.0),
-        Color::srgba(0.025, 0.025, 0.025, 0.98),
-    );
-    spawn_crafting_panel_rect(
-        commands,
-        Vec3::new(-150.0, 90.0, 43.0),
-        Vec2::new(712.0, 528.0),
-        Color::srgba(0.18, 0.17, 0.16, 0.97),
-    );
-    spawn_crafting_panel_rect(
-        commands,
-        Vec3::new(-150.0, 70.0, 44.0),
-        Vec2::new(696.0, 466.0),
-        Color::srgba(0.09, 0.085, 0.08, 0.97),
-    );
-    spawn_crafting_panel_rect(
-        commands,
-        Vec3::new(-150.0, 328.0, 45.0),
-        Vec2::new(710.0, 40.0),
-        Color::srgba(0.56, 0.10, 0.07, 0.98),
-    );
-    spawn_crafting_panel_rect(
-        commands,
-        Vec3::new(-150.0, 305.0, 46.0),
-        Vec2::new(710.0, 4.0),
-        Color::srgba(0.98, 0.56, 0.12, 0.92),
+        || CraftingPanelPiece,
+        center,
+        "CRAFTING",
+        UiColors::frame_body(),
+        Visibility::Hidden,
     );
     spawn_crafting_panel_rect(
         commands,
         Vec3::new(-142.0, 70.0, 46.0),
         Vec2::new(3.0, 430.0),
-        Color::srgba(0.70, 0.50, 0.24, 0.62),
-    );
-    spawn_crafting_panel_label(
-        commands,
-        "CRAFTING",
-        Vec3::new(-490.0, 342.0, 48.0),
-        22.0,
-        Color::srgb(1.0, 0.72, 0.20),
+        UiColors::divider(),
     );
     spawn_crafting_panel_label(
         commands,
         "STASH",
         Vec3::new(-500.0, 280.0, 48.0),
         14.0,
-        Color::srgb(0.96, 0.70, 0.32),
+        UiColors::text_section(),
     );
     spawn_inventory_cells(
         commands,
@@ -133,7 +109,7 @@ pub(super) fn spawn_crafting_panel(commands: &mut Commands) {
         "INVENTORY",
         Vec3::new(-500.0, 20.0, 48.0),
         14.0,
-        Color::srgb(0.96, 0.70, 0.32),
+        UiColors::text_section(),
     );
     spawn_inventory_cells(
         commands,
@@ -150,13 +126,13 @@ pub(super) fn spawn_crafting_panel(commands: &mut Commands) {
         "RARITY UPGRADE",
         Vec3::new(-110.0, 240.0, 48.0),
         16.0,
-        Color::srgb(0.96, 0.70, 0.32),
+        UiColors::text_section(),
     );
     spawn_crafting_panel_rect(
         commands,
         Vec3::new(34.0, 160.0, 46.0),
         Vec2::new(312.0, 128.0),
-        Color::srgba(0.13, 0.115, 0.10, 0.96),
+        UiColors::section(),
     );
     spawn_inventory_cells(
         commands,
@@ -184,13 +160,14 @@ pub(super) fn spawn_crafting_panel(commands: &mut Commands) {
 }
 
 fn spawn_crafting_panel_rect(commands: &mut Commands, offset: Vec3, size: Vec2, color: Color) {
-    commands.spawn((
-        Sprite::from_color(color, size),
-        Transform::from_translation(offset),
-        Visibility::Hidden,
-        ScreenFixed { offset },
+    spawn_panel_rect(
+        commands,
         CraftingPanelPiece,
-    ));
+        offset,
+        size,
+        color,
+        Visibility::Hidden,
+    );
 }
 
 fn spawn_crafting_panel_label(
@@ -200,20 +177,17 @@ fn spawn_crafting_panel_label(
     font_size: f32,
     color: Color,
 ) {
-    commands.spawn((
-        Text2d::new(label),
-        TextFont {
-            font_size,
-            ..default()
-        },
-        TextColor(color),
-        TextLayout::new_with_justify(Justify::Left),
-        Anchor::TOP_LEFT,
-        Transform::from_translation(offset),
-        Visibility::Hidden,
-        ScreenFixed { offset },
+    spawn_panel_label(
+        commands,
         CraftingPanelPiece,
-    ));
+        label,
+        offset,
+        font_size,
+        color,
+        Visibility::Hidden,
+        Justify::Left,
+        Anchor::TOP_LEFT,
+    );
 }
 
 pub(crate) fn handle_crafting_input(
@@ -302,27 +276,20 @@ pub(crate) fn sync_crafting_panel(
                     && (cursor.y - fixed.offset.y).abs() <= half_size.y
             });
 
-        sprite.color = if action_ready && hovered {
-            Color::srgba(0.92, 0.50, 0.08, 0.98)
-        } else if action_ready {
-            Color::srgba(0.56, 0.18, 0.05, 0.98)
-        } else if hovered {
-            Color::srgba(0.34, 0.19, 0.12, 0.98)
-        } else {
-            Color::srgba(0.18, 0.13, 0.10, 0.98)
-        };
+        sprite.color = action_button_color(action_ready, hovered);
     }
 
     for (label, mut text_color) in &mut label_query {
         text_color.0 = if crafting_action_ready(label.action, upgrade_ready, liquidation_ready) {
-            Color::srgb(0.96, 0.70, 0.32)
+            UiColors::text_section()
         } else {
             Color::srgba(0.64, 0.58, 0.48, 0.78)
         };
     }
 
     for mut text in &mut info_query {
-        text.0 = crafting_status_text(&profile, &ui_state);
+        let status = crafting_status_text(&profile, &ui_state);
+        text.0 = bounded_lines(status.lines().map(|line| line.to_string()), 31, 4);
     }
 }
 

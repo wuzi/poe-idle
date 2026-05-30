@@ -3,32 +3,35 @@ use bevy::sprite::Anchor;
 
 mod crafting;
 mod talents;
+mod theme;
 
 pub(crate) use crafting::{handle_crafting_input, sync_crafting_panel};
 pub(crate) use talents::{handle_talent_panel, sync_talent_panel};
 
 use crafting::{spawn_crafting_panel, use_item_on_crafting_panel};
 use talents::spawn_talent_panel;
+use theme::{
+    UiColors, bounded_lines, navigation_button_color, spawn_panel_label,
+    spawn_standard_panel_chrome, truncate_chars,
+};
 
 use crate::components::{
     ActivePanel, BottomButton, BottomButtonLabel, CharacterPanelPiece, CharacterPanelText,
     CraftingPanelPiece, DraggedItem, DraggedItemVisual, EquippedTooltipBackground,
     EquippedTooltipText, Health, HudText, InventoryCell, InventoryCellLabel, InventoryPanelPiece,
     InventorySource, ItemTooltipBackground, ItemTooltipText, Player, PortalMapButton,
-    PortalMapButtonLabel, PortalPanelPiece, PortalToggleButton, PortalToggleButtonLabel,
-    ProgressBarFill, ScreenFixed, UiState,
+    PortalMapButtonLabel, PortalMapRouteSlot, PortalPanelPiece, PortalToggleButton,
+    PortalToggleButtonLabel, ProgressBarFill, ScreenFixed, UiState,
 };
 use crate::constants::{
-    BOTTOM_BUTTON_SIZE, INVENTORY_CELL_SIZE, MAP_PROGRESS_LEFT, MAP_PROGRESS_WIDTH, MAP_PROGRESS_Y,
-    TOOLTIP_PADDING, TOOLTIP_WIDTH, WINDOW_HEIGHT, WINDOW_WIDTH,
+    BOTTOM_BUTTON_SIZE, INVENTORY_CELL_SIZE, TOOLTIP_PADDING, TOOLTIP_WIDTH, WINDOW_HEIGHT,
+    WINDOW_WIDTH,
 };
 
 const TOOLTIP_LINE_HEIGHT: f32 = 17.0;
 const TOOLTIP_GAP: f32 = 10.0;
 const TOOLTIP_WRAP_CHARS: usize = 32;
 const PORTAL_ROUTE_VISIBLE_COUNT: usize = 7;
-const PORTAL_ROUTE_TOP_Y: f32 = 112.0;
-const PORTAL_ROUTE_STEP_Y: f32 = 34.0;
 use crate::data::{
     GameDatabase, ItemInstance, ItemLocation, ItemSlot, PlayerProfile, Rarity, RunState, RunStatus,
     TalentNode, item_armor_bonus, item_attack_speed_bonus, item_crit_chance_bonus,
@@ -54,58 +57,7 @@ pub(crate) fn spawn_screen_layout(
         Color::srgba(0.03, 0.025, 0.025, 0.98),
     );
 
-    spawn_portal_panel_frame(commands, Vec3::new(394.0, 112.0, 30.0), "PORTAL");
-    spawn_portal_panel_rect(
-        commands,
-        Vec3::new(394.0, 100.0, 31.0),
-        Vec2::new(312.0, 312.0),
-        Color::srgba(0.58, 0.50, 0.34, 0.94),
-    );
-    spawn_portal_panel_rect(
-        commands,
-        Vec3::new(394.0, 244.0, 32.0),
-        Vec2::new(244.0, 28.0),
-        Color::srgba(0.74, 0.64, 0.42, 0.94),
-    );
-    spawn_portal_panel_rect(
-        commands,
-        Vec3::new(394.0, 126.0, 32.0),
-        Vec2::new(276.0, 250.0),
-        Color::srgba(0.78, 0.68, 0.46, 0.94),
-    );
-    spawn_portal_panel_rect(
-        commands,
-        Vec3::new(394.0, 232.0, 33.0),
-        Vec2::new(244.0, 28.0),
-        Color::srgba(0.62, 0.46, 0.24, 0.92),
-    );
-    spawn_portal_panel_label(
-        commands,
-        "MAP DETAILS",
-        Vec3::new(330.0, 242.0, 35.0),
-        15.0,
-        Color::srgb(0.14, 0.08, 0.035),
-    );
-    spawn_portal_panel_rect(
-        commands,
-        Vec3::new(
-            MAP_PROGRESS_LEFT + MAP_PROGRESS_WIDTH * 0.5,
-            MAP_PROGRESS_Y,
-            32.0,
-        ),
-        Vec2::new(MAP_PROGRESS_WIDTH, 12.0),
-        Color::srgba(0.05, 0.04, 0.035, 0.95),
-    );
-
-    commands.spawn((
-        Sprite::from_color(Color::srgb(0.94, 0.66, 0.22), Vec2::new(1.0, 12.0)),
-        Transform::from_xyz(MAP_PROGRESS_LEFT, MAP_PROGRESS_Y, 33.0),
-        ScreenFixed {
-            offset: Vec3::new(MAP_PROGRESS_LEFT, MAP_PROGRESS_Y, 33.0),
-        },
-        PortalPanelPiece,
-        ProgressBarFill,
-    ));
+    spawn_portal_ui_panel(commands, map_count);
 
     spawn_fixed_text(
         commands,
@@ -113,14 +65,6 @@ pub(crate) fn spawn_screen_layout(
         Vec3::new(-62.0, 378.0, 35.0),
         14.0,
     );
-    spawn_portal_text(
-        commands,
-        HudText::Message,
-        Vec3::new(270.0, 212.0, 35.0),
-        13.0,
-    );
-    spawn_portal_map_route(commands, map_count);
-
     spawn_inventory_panel_frame(commands, Vec3::new(-394.0, 112.0, 30.0), "STASH");
     spawn_inventory_panel_frame(commands, Vec3::new(0.0, 112.0, 30.0), "HERO");
     spawn_inventory_panel_label(commands, "Inventory", Vec3::new(-134.0, 54.0, 35.0), 15.0);
@@ -188,78 +132,212 @@ pub(crate) fn spawn_screen_layout(
     spawn_dragged_item_visual(commands);
 }
 
-fn spawn_portal_panel_frame(commands: &mut Commands, center: Vec3, title: &'static str) {
-    spawn_portal_panel_rect(
+fn spawn_inventory_panel_frame(commands: &mut Commands, center: Vec3, title: &'static str) {
+    spawn_standard_panel_chrome(
         commands,
+        || InventoryPanelPiece,
         center,
-        Vec2::new(368.0, 502.0),
-        Color::srgba(0.025, 0.025, 0.025, 0.98),
-    );
-    spawn_portal_panel_rect(
-        commands,
-        center + Vec3::new(0.0, 0.0, 1.0),
-        Vec2::new(356.0, 490.0),
-        Color::srgba(0.19, 0.18, 0.17, 0.96),
-    );
-    spawn_portal_panel_rect(
-        commands,
-        center + Vec3::new(0.0, -18.0, 2.0),
-        Vec2::new(340.0, 434.0),
-        Color::srgba(0.10, 0.095, 0.085, 0.96),
-    );
-    spawn_portal_panel_rect(
-        commands,
-        center + Vec3::new(0.0, 218.0, 3.0),
-        Vec2::new(338.0, 40.0),
-        Color::srgba(0.56, 0.10, 0.07, 0.98),
-    );
-    spawn_portal_panel_rect(
-        commands,
-        center + Vec3::new(0.0, 195.0, 4.0),
-        Vec2::new(338.0, 4.0),
-        Color::srgba(0.98, 0.56, 0.12, 0.92),
-    );
-    spawn_portal_panel_label(
-        commands,
         title,
-        center + Vec3::new(-54.0, 232.0, 5.0),
-        22.0,
-        Color::srgb(1.0, 0.72, 0.20),
+        Visibility::Hidden,
     );
 }
 
-fn spawn_inventory_panel_frame(commands: &mut Commands, center: Vec3, title: &'static str) {
-    spawn_inventory_panel_rect(
-        commands,
-        center,
-        Vec2::new(368.0, 502.0),
-        Color::srgba(0.025, 0.025, 0.025, 0.98),
-    );
-    spawn_inventory_panel_rect(
-        commands,
-        center + Vec3::new(0.0, 0.0, 1.0),
-        Vec2::new(356.0, 490.0),
-        Color::srgba(0.19, 0.18, 0.17, 0.96),
-    );
-    spawn_inventory_panel_rect(
-        commands,
-        center + Vec3::new(0.0, -18.0, 2.0),
-        Vec2::new(340.0, 434.0),
-        Color::srgba(0.09, 0.085, 0.08, 0.97),
-    );
-    spawn_inventory_panel_rect(
-        commands,
-        center + Vec3::new(0.0, 218.0, 3.0),
-        Vec2::new(338.0, 40.0),
-        Color::srgba(0.56, 0.10, 0.07, 0.98),
-    );
-    spawn_inventory_panel_rect(
-        commands,
-        center + Vec3::new(0.0, 195.0, 4.0),
-        Vec2::new(338.0, 4.0),
-        Color::srgba(0.98, 0.56, 0.12, 0.92),
-    );
-    spawn_inventory_panel_label(commands, title, center + Vec3::new(-54.0, 232.0, 5.0), 22.0);
+fn spawn_portal_ui_panel(commands: &mut Commands, map_count: usize) {
+    commands
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                left: px(800.0),
+                top: px(17.0),
+                width: px(368.0),
+                height: px(502.0),
+                padding: UiRect::all(px(6)),
+                flex_direction: FlexDirection::Column,
+                ..default()
+            },
+            BackgroundColor(UiColors::frame_shadow()),
+            Visibility::Visible,
+            ZIndex(12),
+            PortalPanelPiece,
+        ))
+        .with_children(|panel| {
+            panel
+                .spawn((
+                    Node {
+                        width: percent(100),
+                        height: percent(100),
+                        padding: UiRect::all(px(6)),
+                        flex_direction: FlexDirection::Column,
+                        row_gap: px(8),
+                        ..default()
+                    },
+                    BackgroundColor(UiColors::frame_shell()),
+                ))
+                .with_children(|shell| {
+                    shell
+                        .spawn((
+                            Node {
+                                width: percent(100),
+                                height: px(40.0),
+                                padding: UiRect::axes(px(18), px(0)),
+                                align_items: AlignItems::Center,
+                                ..default()
+                            },
+                            BackgroundColor(UiColors::header()),
+                        ))
+                        .with_children(|header| {
+                            header.spawn((
+                                Text::new("PORTAL"),
+                                TextFont {
+                                    font_size: 22.0,
+                                    ..default()
+                                },
+                                TextColor(UiColors::text_header()),
+                                Label,
+                            ));
+                        });
+
+                    shell.spawn((
+                        Node {
+                            width: percent(100),
+                            height: px(4.0),
+                            ..default()
+                        },
+                        BackgroundColor(UiColors::accent()),
+                    ));
+
+                    shell
+                        .spawn((
+                            Node {
+                                width: percent(100),
+                                flex_grow: 1.0,
+                                padding: UiRect::all(px(10)),
+                                flex_direction: FlexDirection::Column,
+                                row_gap: px(8),
+                                overflow: Overflow::clip_y(),
+                                ..default()
+                            },
+                            BackgroundColor(UiColors::frame_body()),
+                        ))
+                        .with_children(|body| {
+                            body.spawn((
+                                Node {
+                                    width: percent(100),
+                                    padding: UiRect::all(px(10)),
+                                    flex_direction: FlexDirection::Column,
+                                    row_gap: px(8),
+                                    ..default()
+                                },
+                                BackgroundColor(UiColors::section()),
+                            ))
+                            .with_children(|details| {
+                                details.spawn((
+                                    Text::new("MAP DETAILS"),
+                                    TextFont {
+                                        font_size: 15.0,
+                                        ..default()
+                                    },
+                                    TextColor(UiColors::text_section()),
+                                    Label,
+                                ));
+                                details.spawn((
+                                    Text::new(""),
+                                    TextFont {
+                                        font_size: 13.0,
+                                        ..default()
+                                    },
+                                    TextColor(UiColors::text_primary()),
+                                    TextLayout::new_with_justify(Justify::Left),
+                                    Node {
+                                        width: percent(100),
+                                        ..default()
+                                    },
+                                    HudText::Message,
+                                    Label,
+                                ));
+                                details
+                                    .spawn((
+                                        Node {
+                                            width: percent(100),
+                                            height: px(12.0),
+                                            ..default()
+                                        },
+                                        BackgroundColor(Color::srgba(0.05, 0.04, 0.035, 0.95)),
+                                    ))
+                                    .with_children(|bar| {
+                                        bar.spawn((
+                                            Node {
+                                                width: px(1.0),
+                                                height: percent(100),
+                                                ..default()
+                                            },
+                                            BackgroundColor(Color::srgb(0.94, 0.66, 0.22)),
+                                            ProgressBarFill,
+                                        ));
+                                    });
+                            });
+
+                            body.spawn((
+                                Node {
+                                    width: percent(100),
+                                    flex_grow: 1.0,
+                                    min_height: px(0),
+                                    padding: UiRect::all(px(10)),
+                                    flex_direction: FlexDirection::Column,
+                                    row_gap: px(6),
+                                    overflow: Overflow::clip_y(),
+                                    ..default()
+                                },
+                                BackgroundColor(UiColors::section()),
+                            ))
+                            .with_children(|route| {
+                                for slot_index in
+                                    0..PORTAL_ROUTE_VISIBLE_COUNT.min(map_count.max(1))
+                                {
+                                    spawn_portal_ui_route_button(route, slot_index);
+                                }
+                            });
+                        });
+                });
+        });
+}
+
+fn spawn_portal_ui_route_button(parent: &mut ChildSpawnerCommands, slot_index: usize) {
+    parent
+        .spawn((
+            Button,
+            Node {
+                width: percent(100),
+                height: px(32.0),
+                padding: UiRect::axes(px(10), px(0)),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Center,
+                border: UiRect::all(px(1)),
+                ..default()
+            },
+            BorderColor::all(UiColors::accent().with_alpha(0.55)),
+            BackgroundColor(Color::srgba(0.28, 0.18, 0.09, 0.95)),
+            PortalMapRouteSlot { slot_index },
+            PortalMapButton {
+                map_index: slot_index,
+            },
+        ))
+        .with_children(|button| {
+            button.spawn((
+                Text::new(""),
+                TextFont {
+                    font_size: 10.5,
+                    ..default()
+                },
+                TextColor(UiColors::text_primary()),
+                TextLayout::new_with_justify(Justify::Center),
+                PortalMapRouteSlot { slot_index },
+                PortalMapButtonLabel {
+                    map_index: slot_index,
+                },
+                Label,
+            ));
+        });
 }
 
 fn spawn_inventory_cells(
@@ -345,26 +423,6 @@ fn spawn_fixed_rect(commands: &mut Commands, offset: Vec3, size: Vec2, color: Co
     ));
 }
 
-fn spawn_portal_panel_rect(commands: &mut Commands, offset: Vec3, size: Vec2, color: Color) {
-    commands.spawn((
-        Sprite::from_color(color, size),
-        Transform::from_translation(offset),
-        Visibility::Visible,
-        ScreenFixed { offset },
-        PortalPanelPiece,
-    ));
-}
-
-fn spawn_inventory_panel_rect(commands: &mut Commands, offset: Vec3, size: Vec2, color: Color) {
-    commands.spawn((
-        Sprite::from_color(color, size),
-        Transform::from_translation(offset),
-        Visibility::Hidden,
-        ScreenFixed { offset },
-        InventoryPanelPiece,
-    ));
-}
-
 fn spawn_fixed_text(commands: &mut Commands, kind: HudText, offset: Vec3, font_size: f32) {
     commands.spawn((
         Text2d::new(""),
@@ -372,99 +430,12 @@ fn spawn_fixed_text(commands: &mut Commands, kind: HudText, offset: Vec3, font_s
             font_size,
             ..default()
         },
-        TextColor(Color::srgb(0.92, 0.89, 0.80)),
+        TextColor(UiColors::text_primary()),
         TextLayout::new_with_justify(Justify::Left),
         Anchor::TOP_LEFT,
         Transform::from_translation(offset),
         ScreenFixed { offset },
         kind,
-    ));
-}
-
-fn spawn_portal_text(commands: &mut Commands, kind: HudText, offset: Vec3, font_size: f32) {
-    commands.spawn((
-        Text2d::new(""),
-        TextFont {
-            font_size,
-            ..default()
-        },
-        TextColor(Color::srgb(0.10, 0.07, 0.04)),
-        TextLayout::new_with_justify(Justify::Left),
-        Anchor::TOP_LEFT,
-        Transform::from_translation(offset),
-        Visibility::Visible,
-        ScreenFixed { offset },
-        PortalPanelPiece,
-        kind,
-    ));
-}
-
-fn spawn_portal_map_route(commands: &mut Commands, map_count: usize) {
-    for map_index in 0..map_count {
-        let center = portal_route_card_offset(map_index);
-        spawn_portal_map_button(commands, map_index, center);
-    }
-}
-
-fn portal_route_card_offset(slot_index: usize) -> Vec3 {
-    Vec3::new(
-        394.0,
-        PORTAL_ROUTE_TOP_Y - slot_index as f32 * PORTAL_ROUTE_STEP_Y,
-        36.0,
-    )
-}
-
-fn spawn_portal_map_button(commands: &mut Commands, map_index: usize, offset: Vec3) {
-    let size = Vec2::new(246.0, 28.0);
-    commands.spawn((
-        Sprite::from_color(Color::srgba(0.28, 0.18, 0.09, 0.95), size),
-        Transform::from_translation(offset),
-        Visibility::Visible,
-        ScreenFixed { offset },
-        PortalPanelPiece,
-        PortalMapButton { map_index, size },
-    ));
-
-    let text_offset = offset + Vec3::new(0.0, 7.0, 1.0);
-    commands.spawn((
-        Text2d::new(""),
-        TextFont {
-            font_size: 8.8,
-            ..default()
-        },
-        TextColor(Color::srgb(0.10, 0.07, 0.04)),
-        TextLayout::new_with_justify(Justify::Center),
-        Anchor::CENTER,
-        Transform::from_translation(text_offset),
-        Visibility::Visible,
-        ScreenFixed {
-            offset: text_offset,
-        },
-        PortalPanelPiece,
-        PortalMapButtonLabel { map_index },
-    ));
-}
-
-fn spawn_portal_panel_label(
-    commands: &mut Commands,
-    label: &'static str,
-    offset: Vec3,
-    font_size: f32,
-    color: Color,
-) {
-    commands.spawn((
-        Text2d::new(label),
-        TextFont {
-            font_size,
-            ..default()
-        },
-        TextColor(color),
-        TextLayout::new_with_justify(Justify::Left),
-        Anchor::TOP_LEFT,
-        Transform::from_translation(offset),
-        Visibility::Visible,
-        ScreenFixed { offset },
-        PortalPanelPiece,
     ));
 }
 
@@ -474,20 +445,17 @@ fn spawn_inventory_panel_label(
     offset: Vec3,
     font_size: f32,
 ) {
-    commands.spawn((
-        Text2d::new(label),
-        TextFont {
-            font_size,
-            ..default()
-        },
-        TextColor(Color::srgb(0.96, 0.70, 0.32)),
-        TextLayout::new_with_justify(Justify::Left),
-        Anchor::TOP_LEFT,
-        Transform::from_translation(offset),
-        Visibility::Hidden,
-        ScreenFixed { offset },
+    spawn_panel_label(
+        commands,
         InventoryPanelPiece,
-    ));
+        label,
+        offset,
+        font_size,
+        UiColors::text_section(),
+        Visibility::Hidden,
+        Justify::Left,
+        Anchor::TOP_LEFT,
+    );
 }
 
 fn spawn_bottom_button(
@@ -496,210 +464,231 @@ fn spawn_bottom_button(
     label: &'static str,
     offset: Vec3,
 ) {
-    commands.spawn((
-        Sprite::from_color(Color::srgba(0.30, 0.11, 0.04, 0.98), BOTTOM_BUTTON_SIZE),
-        Transform::from_translation(offset),
-        ScreenFixed { offset },
-        BottomButton {
-            panel,
-            size: BOTTOM_BUTTON_SIZE,
-        },
-    ));
-
-    let text_offset = offset + Vec3::new(0.0, 7.0, 1.0);
-    commands.spawn((
-        Text2d::new(label),
-        TextFont {
-            font_size: 13.0,
-            ..default()
-        },
-        TextColor(Color::srgb(0.96, 0.70, 0.32)),
-        TextLayout::new_with_justify(Justify::Center),
-        Anchor::CENTER,
-        Transform::from_translation(text_offset),
-        ScreenFixed {
-            offset: text_offset,
-        },
-        BottomButtonLabel { panel },
-    ));
+    let left = offset.x + WINDOW_WIDTH as f32 * 0.5 - BOTTOM_BUTTON_SIZE.x * 0.5;
+    let bottom = WINDOW_HEIGHT as f32 * 0.5 + offset.y - BOTTOM_BUTTON_SIZE.y * 0.5;
+    commands
+        .spawn((
+            Button,
+            Node {
+                position_type: PositionType::Absolute,
+                left: px(left),
+                bottom: px(bottom),
+                width: px(BOTTOM_BUTTON_SIZE.x),
+                height: px(BOTTOM_BUTTON_SIZE.y),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Center,
+                border: UiRect::all(px(2)),
+                ..default()
+            },
+            BorderColor::all(UiColors::accent()),
+            BackgroundColor(navigation_button_color(false, false)),
+            ZIndex(20),
+            BottomButton {
+                panel,
+                size: BOTTOM_BUTTON_SIZE,
+            },
+        ))
+        .with_children(|parent| {
+            parent.spawn((
+                Text::new(label),
+                TextFont {
+                    font_size: 13.0,
+                    ..default()
+                },
+                TextColor(UiColors::text_section()),
+                BottomButtonLabel { panel },
+                Label,
+            ));
+        });
 }
 
 fn spawn_portal_toggle_button(commands: &mut Commands, label: &'static str, offset: Vec3) {
-    commands.spawn((
-        Sprite::from_color(Color::srgba(0.30, 0.11, 0.04, 0.98), BOTTOM_BUTTON_SIZE),
-        Transform::from_translation(offset),
-        ScreenFixed { offset },
-        PortalToggleButton {
-            size: BOTTOM_BUTTON_SIZE,
-        },
-    ));
-
-    let text_offset = offset + Vec3::new(0.0, 7.0, 1.0);
-    commands.spawn((
-        Text2d::new(label),
-        TextFont {
-            font_size: 13.0,
-            ..default()
-        },
-        TextColor(Color::srgb(0.18, 0.07, 0.02)),
-        TextLayout::new_with_justify(Justify::Center),
-        Anchor::CENTER,
-        Transform::from_translation(text_offset),
-        ScreenFixed {
-            offset: text_offset,
-        },
-        PortalToggleButtonLabel,
-    ));
+    let left = offset.x + WINDOW_WIDTH as f32 * 0.5 - BOTTOM_BUTTON_SIZE.x * 0.5;
+    let bottom = WINDOW_HEIGHT as f32 * 0.5 + offset.y - BOTTOM_BUTTON_SIZE.y * 0.5;
+    commands
+        .spawn((
+            Button,
+            Node {
+                position_type: PositionType::Absolute,
+                left: px(left),
+                bottom: px(bottom),
+                width: px(BOTTOM_BUTTON_SIZE.x),
+                height: px(BOTTOM_BUTTON_SIZE.y),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Center,
+                border: UiRect::all(px(2)),
+                ..default()
+            },
+            BorderColor::all(UiColors::accent()),
+            BackgroundColor(navigation_button_color(false, false)),
+            ZIndex(20),
+            PortalToggleButton,
+        ))
+        .with_children(|parent| {
+            parent.spawn((
+                Text::new(label),
+                TextFont {
+                    font_size: 13.0,
+                    ..default()
+                },
+                TextColor(UiColors::text_section()),
+                PortalToggleButtonLabel,
+                Label,
+            ));
+        });
 }
 
 fn spawn_character_panel(commands: &mut Commands) {
-    spawn_character_panel_frame(commands, Vec3::new(-394.0, 112.0, 42.0), "STATUS");
-    spawn_character_panel_frame(commands, Vec3::new(0.0, 112.0, 42.0), "HERO");
-
-    spawn_character_panel_text(
-        commands,
-        CharacterPanelText::Header,
-        Vec3::new(-40.0, 310.0, 47.0),
-        15.0,
-        Color::srgb(0.96, 0.70, 0.32),
-    );
-    spawn_character_panel_text(
-        commands,
-        CharacterPanelText::Status,
-        Vec3::new(-548.0, 286.0, 47.0),
-        13.0,
-        Color::srgb(0.92, 0.89, 0.80),
-    );
-    spawn_character_panel_text(
-        commands,
-        CharacterPanelText::Combat,
-        Vec3::new(-548.0, 148.0, 47.0),
-        12.0,
-        Color::srgb(0.92, 0.89, 0.80),
-    );
-    spawn_character_panel_text(
-        commands,
-        CharacterPanelText::Attributes,
-        Vec3::new(-548.0, 38.0, 47.0),
-        12.0,
-        Color::srgb(0.92, 0.89, 0.80),
-    );
-    spawn_character_panel_text(
-        commands,
-        CharacterPanelText::Equipment,
-        Vec3::new(-150.0, 272.0, 47.0),
-        12.0,
-        Color::srgb(0.92, 0.89, 0.80),
-    );
-    spawn_character_panel_text(
-        commands,
-        CharacterPanelText::Talents,
-        Vec3::new(-548.0, -58.0, 47.0),
-        12.0,
-        Color::srgb(0.92, 0.89, 0.80),
-    );
-    spawn_character_panel_text(
-        commands,
-        CharacterPanelText::Upgrades,
-        Vec3::new(-150.0, 82.0, 47.0),
-        12.0,
-        Color::srgb(0.92, 0.89, 0.80),
-    );
+    spawn_character_ui_window(commands, "STATUS", 12.0, 17.0, |parent| {
+        spawn_character_ui_section(parent, CharacterPanelText::Status, 1.05);
+        spawn_character_ui_section(parent, CharacterPanelText::Combat, 1.15);
+        spawn_character_ui_section(parent, CharacterPanelText::Attributes, 0.55);
+        spawn_character_ui_section(parent, CharacterPanelText::Talents, 0.8);
+    });
+    spawn_character_ui_window(commands, "HERO", 406.0, 17.0, |parent| {
+        spawn_character_ui_section(parent, CharacterPanelText::Header, 0.38);
+        spawn_character_ui_section(parent, CharacterPanelText::Equipment, 1.35);
+        spawn_character_ui_section(parent, CharacterPanelText::Upgrades, 1.45);
+    });
 }
 
-fn spawn_character_panel_frame(commands: &mut Commands, center: Vec3, title: &'static str) {
-    spawn_character_panel_rect(
-        commands,
-        center,
-        Vec2::new(368.0, 502.0),
-        Color::srgba(0.025, 0.025, 0.025, 0.98),
-    );
-    spawn_character_panel_rect(
-        commands,
-        center + Vec3::new(0.0, 0.0, 1.0),
-        Vec2::new(356.0, 490.0),
-        Color::srgba(0.19, 0.18, 0.17, 0.96),
-    );
-    spawn_character_panel_rect(
-        commands,
-        center + Vec3::new(0.0, -18.0, 2.0),
-        Vec2::new(340.0, 434.0),
-        Color::srgba(0.10, 0.095, 0.085, 0.97),
-    );
-    spawn_character_panel_rect(
-        commands,
-        center + Vec3::new(0.0, 218.0, 3.0),
-        Vec2::new(338.0, 40.0),
-        Color::srgba(0.56, 0.10, 0.07, 0.98),
-    );
-    spawn_character_panel_rect(
-        commands,
-        center + Vec3::new(0.0, 195.0, 4.0),
-        Vec2::new(338.0, 4.0),
-        Color::srgba(0.98, 0.56, 0.12, 0.92),
-    );
-    spawn_character_panel_static_label(
-        commands,
-        title,
-        center + Vec3::new(-54.0, 232.0, 5.0),
-        22.0,
-    );
-}
-
-fn spawn_character_panel_rect(commands: &mut Commands, offset: Vec3, size: Vec2, color: Color) {
-    commands.spawn((
-        Sprite::from_color(color, size),
-        Transform::from_translation(offset),
-        Visibility::Hidden,
-        ScreenFixed { offset },
-        CharacterPanelPiece,
-    ));
-}
-
-fn spawn_character_panel_static_label(
+fn spawn_character_ui_window(
     commands: &mut Commands,
-    label: &'static str,
-    offset: Vec3,
-    font_size: f32,
+    title: &'static str,
+    left: f32,
+    top: f32,
+    spawn_body: impl FnOnce(&mut ChildSpawnerCommands),
 ) {
-    commands.spawn((
-        Text2d::new(label),
-        TextFont {
-            font_size,
-            ..default()
-        },
-        TextColor(Color::srgb(1.0, 0.72, 0.20)),
-        TextLayout::new_with_justify(Justify::Left),
-        Anchor::TOP_LEFT,
-        Transform::from_translation(offset),
-        Visibility::Hidden,
-        ScreenFixed { offset },
-        CharacterPanelPiece,
-    ));
+    commands
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                left: px(left),
+                top: px(top),
+                width: px(368.0),
+                height: px(502.0),
+                padding: UiRect::all(px(6)),
+                flex_direction: FlexDirection::Column,
+                ..default()
+            },
+            BackgroundColor(UiColors::frame_shadow()),
+            Visibility::Hidden,
+            ZIndex(12),
+            CharacterPanelPiece,
+        ))
+        .with_children(|panel| {
+            panel
+                .spawn((
+                    Node {
+                        width: percent(100),
+                        height: percent(100),
+                        padding: UiRect::all(px(6)),
+                        flex_direction: FlexDirection::Column,
+                        row_gap: px(8),
+                        ..default()
+                    },
+                    BackgroundColor(UiColors::frame_shell()),
+                ))
+                .with_children(|shell| {
+                    shell
+                        .spawn((
+                            Node {
+                                width: percent(100),
+                                height: px(40.0),
+                                padding: UiRect::axes(px(18), px(0)),
+                                align_items: AlignItems::Center,
+                                ..default()
+                            },
+                            BackgroundColor(UiColors::header()),
+                        ))
+                        .with_children(|header| {
+                            header.spawn((
+                                Text::new(title),
+                                TextFont {
+                                    font_size: 22.0,
+                                    ..default()
+                                },
+                                TextColor(UiColors::text_header()),
+                                Label,
+                            ));
+                        });
+
+                    shell.spawn((
+                        Node {
+                            width: percent(100),
+                            height: px(4.0),
+                            ..default()
+                        },
+                        BackgroundColor(UiColors::accent()),
+                    ));
+
+                    shell
+                        .spawn((
+                            Node {
+                                width: percent(100),
+                                flex_grow: 1.0,
+                                padding: UiRect::all(px(10)),
+                                flex_direction: FlexDirection::Column,
+                                row_gap: px(8),
+                                overflow: Overflow::clip_y(),
+                                ..default()
+                            },
+                            BackgroundColor(UiColors::frame_body()),
+                        ))
+                        .with_children(spawn_body);
+                });
+        });
 }
 
-fn spawn_character_panel_text(
-    commands: &mut Commands,
+fn spawn_character_ui_section(
+    parent: &mut ChildSpawnerCommands,
     kind: CharacterPanelText,
-    offset: Vec3,
-    font_size: f32,
-    color: Color,
+    flex_grow: f32,
 ) {
-    commands.spawn((
-        Text2d::new(""),
-        TextFont {
-            font_size,
-            ..default()
-        },
-        TextColor(color),
-        TextLayout::new_with_justify(Justify::Left),
-        Anchor::TOP_LEFT,
-        Transform::from_translation(offset),
-        Visibility::Hidden,
-        ScreenFixed { offset },
-        CharacterPanelPiece,
-        kind,
-    ));
+    parent
+        .spawn((
+            Node {
+                width: percent(100),
+                flex_grow,
+                min_height: px(0),
+                padding: UiRect::all(px(8)),
+                overflow: Overflow::clip_y(),
+                ..default()
+            },
+            BackgroundColor(UiColors::section()),
+        ))
+        .with_children(|section| {
+            section.spawn((
+                Text::new(""),
+                TextFont {
+                    font_size: character_ui_font_size(kind),
+                    ..default()
+                },
+                TextColor(character_ui_text_color(kind)),
+                TextLayout::new_with_justify(Justify::Left),
+                Node {
+                    width: percent(100),
+                    ..default()
+                },
+                kind,
+                Label,
+            ));
+        });
+}
+
+fn character_ui_font_size(kind: CharacterPanelText) -> f32 {
+    match kind {
+        CharacterPanelText::Header => 15.0,
+        CharacterPanelText::Status => 13.0,
+        _ => 12.0,
+    }
+}
+
+fn character_ui_text_color(kind: CharacterPanelText) -> Color {
+    match kind {
+        CharacterPanelText::Header => UiColors::text_section(),
+        _ => UiColors::text_primary(),
+    }
 }
 
 fn spawn_item_tooltip(commands: &mut Commands) {
@@ -786,6 +775,10 @@ pub(crate) fn handle_bottom_buttons(
     mouse: Res<ButtonInput<MouseButton>>,
     window_query: Query<&Window>,
     mut button_query: Query<(&BottomButton, &ScreenFixed, &mut Sprite)>,
+    mut ui_button_query: Query<
+        (&BottomButton, &Interaction, &mut BackgroundColor),
+        (With<Button>, Without<Sprite>),
+    >,
     mut label_query: Query<(&BottomButtonLabel, &mut TextColor)>,
 ) {
     let cursor_offset = window_query.single().ok().and_then(|window| {
@@ -814,22 +807,30 @@ pub(crate) fn handle_bottom_buttons(
         }
 
         let active = next_panel == button.panel;
-        sprite.color = if active {
-            Color::srgba(0.92, 0.50, 0.08, 0.98)
-        } else if hovered {
-            Color::srgba(0.58, 0.20, 0.06, 0.98)
-        } else {
-            Color::srgba(0.30, 0.11, 0.04, 0.98)
-        };
+        sprite.color = navigation_button_color(active, hovered);
+    }
+
+    for (button, interaction, mut background) in &mut ui_button_query {
+        let hovered = matches!(*interaction, Interaction::Hovered | Interaction::Pressed);
+        if *interaction == Interaction::Pressed && mouse.just_pressed(MouseButton::Left) {
+            next_panel = if ui_state.active_panel == button.panel {
+                ActivePanel::None
+            } else {
+                button.panel
+            };
+        }
+
+        let active = next_panel == button.panel;
+        background.0 = navigation_button_color(active, hovered);
     }
 
     ui_state.active_panel = next_panel;
 
     for (label, mut text_color) in &mut label_query {
         text_color.0 = if ui_state.active_panel == label.panel {
-            Color::srgb(0.18, 0.07, 0.02)
+            UiColors::text_dark()
         } else {
-            Color::srgb(0.96, 0.70, 0.32)
+            UiColors::text_section()
         };
     }
 }
@@ -840,41 +841,34 @@ pub(crate) fn handle_portal_button(
     profile: Res<PlayerProfile>,
     run: Res<RunState>,
     mouse: Res<ButtonInput<MouseButton>>,
-    window_query: Query<&Window>,
-    mut button_query: Query<
-        (&PortalToggleButton, &ScreenFixed, &mut Sprite),
-        Without<PortalMapButton>,
+    mut ui_toggle_query: Query<
+        (&PortalToggleButton, &Interaction, &mut BackgroundColor),
+        (With<Button>, Without<Sprite>),
     >,
-    map_button_query: Query<(&PortalMapButton, &ScreenFixed), Without<PortalToggleButton>>,
+    ui_map_button_query: Query<
+        (&PortalMapButton, &Interaction),
+        (
+            With<Button>,
+            Without<PortalToggleButton>,
+            Without<ScreenFixed>,
+        ),
+    >,
     mut label_query: Query<&mut TextColor, With<PortalToggleButtonLabel>>,
 ) {
-    let cursor_offset = cursor_offset(&window_query);
-
-    for (button, fixed, mut sprite) in &mut button_query {
-        let hovered = cursor_offset.is_some_and(|cursor| {
-            let half_size = button.size * 0.5;
-            (cursor.x - fixed.offset.x).abs() <= half_size.x
-                && (cursor.y - fixed.offset.y).abs() <= half_size.y
-        });
-
-        if hovered && mouse.just_pressed(MouseButton::Left) {
+    for (_button, interaction, mut background) in &mut ui_toggle_query {
+        let hovered = matches!(*interaction, Interaction::Hovered | Interaction::Pressed);
+        if *interaction == Interaction::Pressed && mouse.just_pressed(MouseButton::Left) {
             ui_state.portal_visible = !ui_state.portal_visible;
         }
 
-        sprite.color = if ui_state.portal_visible {
-            Color::srgba(0.92, 0.50, 0.08, 0.98)
-        } else if hovered {
-            Color::srgba(0.58, 0.20, 0.06, 0.98)
-        } else {
-            Color::srgba(0.30, 0.11, 0.04, 0.98)
-        };
+        background.0 = navigation_button_color(ui_state.portal_visible, hovered);
     }
 
     for mut text_color in &mut label_query {
         text_color.0 = if ui_state.portal_visible {
-            Color::srgb(0.18, 0.07, 0.02)
+            UiColors::text_dark()
         } else {
-            Color::srgb(0.96, 0.70, 0.32)
+            UiColors::text_section()
         };
     }
 
@@ -882,20 +876,14 @@ pub(crate) fn handle_portal_button(
         return;
     }
 
-    let Some(cursor_offset) = cursor_offset else {
-        return;
-    };
-
     let visible_range = portal_visible_map_range(run.map_index, database.maps.len());
 
-    for (button, fixed) in &map_button_query {
+    for (button, interaction) in &ui_map_button_query {
         if !visible_range.contains(&button.map_index) {
             continue;
         }
-        let half_size = button.size * 0.5;
-        let hovered = (cursor_offset.x - fixed.offset.x).abs() <= half_size.x
-            && (cursor_offset.y - fixed.offset.y).abs() <= half_size.y;
-        if hovered && profile.map_unlocked(&database, button.map_index) {
+        if *interaction == Interaction::Pressed && profile.map_unlocked(&database, button.map_index)
+        {
             ui_state.requested_map_index = Some(button.map_index);
             break;
         }
@@ -920,82 +908,55 @@ pub(crate) fn sync_portal_map_buttons(
     profile: Res<PlayerProfile>,
     run: Res<RunState>,
     ui_state: Res<UiState>,
-    window_query: Query<&Window>,
-    mut button_query: Query<
+    mut ui_button_query: Query<
         (
-            &PortalMapButton,
-            &mut ScreenFixed,
+            &PortalMapRouteSlot,
+            &mut PortalMapButton,
+            &Interaction,
             &mut Visibility,
-            &mut Sprite,
+            &mut BackgroundColor,
         ),
-        Without<PortalMapButtonLabel>,
+        (With<Button>, Without<Sprite>),
     >,
-    mut label_query: Query<
+    mut ui_label_query: Query<
         (
-            &PortalMapButtonLabel,
-            &mut ScreenFixed,
-            &mut Visibility,
-            &mut Text2d,
+            &PortalMapRouteSlot,
+            &mut PortalMapButtonLabel,
+            &mut Text,
             &mut TextColor,
         ),
-        Without<PortalMapButton>,
+        (With<Text>, Without<Text2d>),
     >,
 ) {
-    let cursor_offset = cursor_offset(&window_query);
     let highest_unlocked = profile.highest_unlocked_map_index(&database);
     let visible_range = portal_visible_map_range(run.map_index, database.maps.len());
 
-    for (button, mut fixed, mut visibility, mut sprite) in &mut button_query {
-        if !visible_range.contains(&button.map_index) || !ui_state.portal_visible {
+    for (slot, mut button, interaction, mut visibility, mut background) in &mut ui_button_query {
+        if !ui_state.portal_visible || slot.slot_index >= visible_range.len() {
             *visibility = Visibility::Hidden;
             continue;
         }
 
-        let mut offset = portal_route_card_offset(button.map_index - visible_range.start);
-        offset.z = fixed.offset.z;
-        fixed.offset = offset;
+        button.map_index = visible_range.start + slot.slot_index;
         *visibility = Visibility::Visible;
 
         let unlocked = profile.map_unlocked(&database, button.map_index);
         let current = run.map_index == button.map_index;
         let conquered = button.map_index < highest_unlocked;
-        let hovered = unlocked
-            && cursor_offset.is_some_and(|cursor| {
-                let half_size = button.size * 0.5;
-                (cursor.x - fixed.offset.x).abs() <= half_size.x
-                    && (cursor.y - fixed.offset.y).abs() <= half_size.y
-            });
-
-        sprite.color = if current && hovered {
-            Color::srgba(0.94, 0.58, 0.10, 0.98)
-        } else if current {
-            Color::srgba(0.78, 0.38, 0.08, 0.98)
-        } else if conquered && hovered {
-            Color::srgba(0.46, 0.55, 0.22, 0.98)
-        } else if conquered {
-            Color::srgba(0.28, 0.40, 0.18, 0.96)
-        } else if unlocked && hovered {
-            Color::srgba(0.68, 0.42, 0.12, 0.98)
-        } else if unlocked {
-            Color::srgba(0.42, 0.27, 0.10, 0.96)
-        } else {
-            Color::srgba(0.12, 0.10, 0.09, 0.88)
-        };
+        let hovered =
+            unlocked && matches!(*interaction, Interaction::Hovered | Interaction::Pressed);
+        background.0 = portal_map_button_color(current, conquered, unlocked, hovered);
     }
 
-    for (label, mut fixed, mut visibility, mut text, mut text_color) in &mut label_query {
-        if !visible_range.contains(&label.map_index) || !ui_state.portal_visible {
-            *visibility = Visibility::Hidden;
+    for (slot, mut label, mut text, mut text_color) in &mut ui_label_query {
+        if slot.slot_index >= visible_range.len() || !ui_state.portal_visible {
+            text.0.clear();
             continue;
         }
 
-        let mut offset = portal_route_card_offset(label.map_index - visible_range.start)
-            + Vec3::new(0.0, 5.0, 1.0);
-        offset.z = fixed.offset.z;
-        fixed.offset = offset;
-        *visibility = Visibility::Visible;
-
+        label.map_index = visible_range.start + slot.slot_index;
         let Some(map) = database.maps.get(label.map_index) else {
+            text.0.clear();
             continue;
         };
         let unlocked = profile.map_unlocked(&database, label.map_index);
@@ -1010,20 +971,50 @@ pub(crate) fn sync_portal_map_buttons(
             "LOCKED"
         };
 
-        text.0 = format!(
-            "{}. {}\nEnemy Lv {}   {}",
-            label.map_index + 1,
-            map.name,
-            map.recommended_enemy_level(),
-            state
-        );
-        text_color.0 = if current {
-            Color::srgb(0.14, 0.06, 0.02)
-        } else if unlocked {
-            Color::srgb(0.95, 0.84, 0.58)
-        } else {
-            Color::srgba(0.58, 0.54, 0.48, 0.72)
-        };
+        text.0 = portal_map_label_text(label.map_index, map, state);
+        text_color.0 = portal_map_label_color(current, unlocked);
+    }
+}
+
+fn portal_map_button_color(current: bool, conquered: bool, unlocked: bool, hovered: bool) -> Color {
+    if current && hovered {
+        Color::srgba(0.94, 0.58, 0.10, 0.98)
+    } else if current {
+        Color::srgba(0.78, 0.38, 0.08, 0.98)
+    } else if conquered && hovered {
+        Color::srgba(0.46, 0.55, 0.22, 0.98)
+    } else if conquered {
+        Color::srgba(0.28, 0.40, 0.18, 0.96)
+    } else if unlocked && hovered {
+        Color::srgba(0.68, 0.42, 0.12, 0.98)
+    } else if unlocked {
+        Color::srgba(0.42, 0.27, 0.10, 0.96)
+    } else {
+        Color::srgba(0.12, 0.10, 0.09, 0.88)
+    }
+}
+
+fn portal_map_label_text(
+    map_index: usize,
+    map: &crate::data::MapDefinition,
+    state: &str,
+) -> String {
+    format!(
+        "{:02}. {}   Lv {}   {}",
+        map_index + 1,
+        truncate_chars(map.name, 20),
+        map.recommended_enemy_level(),
+        state
+    )
+}
+
+fn portal_map_label_color(current: bool, unlocked: bool) -> Color {
+    if current {
+        UiColors::text_dark()
+    } else if unlocked {
+        Color::srgb(0.95, 0.84, 0.58)
+    } else {
+        Color::srgba(0.58, 0.54, 0.48, 0.72)
     }
 }
 
@@ -1160,7 +1151,8 @@ pub(crate) fn sync_character_panel(
     ui_state: Res<UiState>,
     player_query: Query<&Health, With<Player>>,
     mut visibility_query: Query<&mut Visibility, With<CharacterPanelPiece>>,
-    mut text_query: Query<(&CharacterPanelText, &mut Text2d)>,
+    mut text_2d_query: Query<(&CharacterPanelText, &mut Text2d)>,
+    mut ui_text_query: Query<(&CharacterPanelText, &mut Text), Without<Text2d>>,
 ) {
     let is_visible = ui_state.active_panel == ActivePanel::Character;
     for mut visibility in &mut visibility_query {
@@ -1184,31 +1176,41 @@ pub(crate) fn sync_character_panel(
         .map(|health| format!("{:.0}/{:.0}", health.current.max(0.0), health.max))
         .unwrap_or_else(|_| "--".into());
 
-    for (kind, mut text) in &mut text_query {
-        text.0 = match kind {
+    let panel_text = |kind: &CharacterPanelText| -> String {
+        match kind {
             CharacterPanelText::Header => format!("{}  Lv.{}", class.name, profile.level),
-            CharacterPanelText::Status => format!(
-                "Level        {}\nEXP          {}/{}\nHP           {}\nGold         {}\nMap          {}\nEnemies      {}/{}\nRespawns     {}",
-                profile.level,
-                profile.xp,
-                profile.xp_to_next_level(),
-                health_text,
-                profile.gold,
-                map.name,
-                run.enemies_defeated,
-                run.enemies_total,
-                profile.respawns,
+            CharacterPanelText::Status => bounded_lines(
+                vec![
+                    format!("Level        {}", profile.level),
+                    format!("EXP          {}/{}", profile.xp, profile.xp_to_next_level()),
+                    format!("HP           {}", health_text),
+                    format!("Gold         {}", profile.gold),
+                    format!("Map          {}", truncate_chars(map.name, 14)),
+                    format!(
+                        "Enemies      {}/{}",
+                        run.enemies_defeated, run.enemies_total
+                    ),
+                    format!("Respawns     {}", profile.respawns),
+                ],
+                28,
+                7,
             ),
-            CharacterPanelText::Combat => format!(
-                "Combat\nDamage       {:.0}\nArmor        {:.0}\nAttack speed {:.2}/s\nCrit         {:.1}% / +{:.0}%\nMove speed   {:.0}\nRegen        {:.1}/s\nLoot bonus   +{:.0}%",
-                stats.damage,
-                stats.armor,
-                stats.attacks_per_second,
-                stats.crit_chance,
-                stats.crit_damage,
-                stats.move_speed,
-                stats.health_regeneration,
-                stats.loot_bonus,
+            CharacterPanelText::Combat => bounded_lines(
+                vec![
+                    "Combat".to_string(),
+                    format!("Damage       {:.0}", stats.damage),
+                    format!("Armor        {:.0}", stats.armor),
+                    format!("Attack speed {:.2}/s", stats.attacks_per_second),
+                    format!(
+                        "Crit         {:.1}% / +{:.0}%",
+                        stats.crit_chance, stats.crit_damage
+                    ),
+                    format!("Move speed   {:.0}", stats.move_speed),
+                    format!("Regen        {:.1}/s", stats.health_regeneration),
+                    format!("Loot bonus   +{:.0}%", stats.loot_bonus),
+                ],
+                28,
+                8,
             ),
             CharacterPanelText::Attributes => format!(
                 "Attributes\nSTR {}   DEX {}\nINT {}   VIT {}",
@@ -1220,7 +1222,15 @@ pub(crate) fn sync_character_panel(
             CharacterPanelText::Equipment => equipment_summary(&profile, &database),
             CharacterPanelText::Talents => talent_summary(&profile, &database),
             CharacterPanelText::Upgrades => upgrade_summary(&profile, &database),
-        };
+        }
+    };
+
+    for (kind, mut text) in &mut text_2d_query {
+        text.0 = panel_text(kind);
+    }
+
+    for (kind, mut text) in &mut ui_text_query {
+        text.0 = panel_text(kind);
     }
 }
 
@@ -1611,7 +1621,8 @@ pub(crate) fn sync_hud_text(
     database: Res<GameDatabase>,
     profile: Res<PlayerProfile>,
     run: Res<RunState>,
-    mut query: Query<(&HudText, &mut Text2d)>,
+    mut text_2d_query: Query<(&HudText, &mut Text2d)>,
+    mut ui_text_query: Query<(&HudText, &mut Text), Without<Text2d>>,
 ) {
     let map = &database.maps[run.map_index];
     let unlocked_count = profile.highest_unlocked_map_index(&database) + 1;
@@ -1622,12 +1633,12 @@ pub(crate) fn sync_hud_text(
         RunStatus::Cleared => "Cleared",
     };
 
-    for (kind, mut text) in &mut query {
-        text.0 = match kind {
+    let hud_text = |kind: &HudText| -> String {
+        match kind {
             HudText::Header => format!("Gold {:>6}", profile.gold),
             HudText::Message => format!(
                 "{}\nStage {}/{}  Enemy Lv {}\nUnlocked {}/{}  {}\n{}",
-                map.name,
+                truncate_chars(map.name, 24),
                 run.map_index + 1,
                 total_maps,
                 map.recommended_enemy_level(),
@@ -1636,7 +1647,15 @@ pub(crate) fn sync_hud_text(
                 run_status,
                 portal_log_lines(&run.message),
             ),
-        };
+        }
+    };
+
+    for (kind, mut text) in &mut text_2d_query {
+        text.0 = hud_text(kind);
+    }
+
+    for (kind, mut text) in &mut ui_text_query {
+        text.0 = hud_text(kind);
     }
 }
 
@@ -1800,12 +1819,12 @@ fn equipment_summary(profile: &PlayerProfile, database: &GameDatabase) -> String
             .as_ref()
             .map(|item| {
                 let definition = &database.items[item.def_id];
-                format!("{} +{}", definition.name, item.power)
+                truncate_chars(&format!("{} +{}", definition.name, item.power), 22)
             })
             .unwrap_or_else(|| "Empty".to_string());
         lines.push(format!("{:>4}  {}", slot_abbreviation(slot), text));
     }
-    lines.join("\n")
+    bounded_lines(lines, 30, 9)
 }
 
 fn talent_summary(profile: &PlayerProfile, database: &GameDatabase) -> String {
@@ -1823,7 +1842,12 @@ fn talent_summary(profile: &PlayerProfile, database: &GameDatabase) -> String {
         }
         total += 1;
         if shown < 4 {
-            lines.push(format!("{}  {}/{}", node.name, points, node.max_points));
+            lines.push(format!(
+                "{}  {}/{}",
+                truncate_chars(node.name, 19),
+                points,
+                node.max_points
+            ));
             shown += 1;
         }
     }
@@ -1832,7 +1856,7 @@ fn talent_summary(profile: &PlayerProfile, database: &GameDatabase) -> String {
     } else if total > shown {
         lines.push(format!("(+{} more)", total - shown));
     }
-    lines.join("\n")
+    bounded_lines(lines, 30, 7)
 }
 
 fn upgrade_summary(profile: &PlayerProfile, database: &GameDatabase) -> String {
@@ -1890,5 +1914,5 @@ fn upgrade_summary(profile: &PlayerProfile, database: &GameDatabase) -> String {
         "        +{} INT +{} VIT",
         class.growth.intelligence, class.growth.vitality
     ));
-    lines.join("\n")
+    bounded_lines(lines, 30, 12)
 }

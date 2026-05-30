@@ -101,9 +101,7 @@ pub(crate) struct BottomButtonLabel {
 }
 
 #[derive(Component)]
-pub(crate) struct PortalToggleButton {
-    pub(crate) size: Vec2,
-}
+pub(crate) struct PortalToggleButton;
 
 #[derive(Component)]
 pub(crate) struct PortalToggleButtonLabel;
@@ -111,12 +109,16 @@ pub(crate) struct PortalToggleButtonLabel;
 #[derive(Component)]
 pub(crate) struct PortalMapButton {
     pub(crate) map_index: usize,
-    pub(crate) size: Vec2,
 }
 
 #[derive(Component)]
 pub(crate) struct PortalMapButtonLabel {
     pub(crate) map_index: usize,
+}
+
+#[derive(Component)]
+pub(crate) struct PortalMapRouteSlot {
+    pub(crate) slot_index: usize,
 }
 
 #[derive(Component)]
@@ -184,7 +186,7 @@ pub(crate) enum CraftingAction {
 #[derive(Component)]
 pub(crate) struct CraftingInfoText;
 
-#[derive(Component)]
+#[derive(Clone, Copy, Component)]
 pub(crate) enum CharacterPanelText {
     Header,
     Status,

@@ -15,7 +15,6 @@ pub(crate) const CRAFTING_SLOT_COUNT: usize = 5;
 pub(crate) const INVENTORY_CELL_SIZE: f32 = 38.0;
 pub(crate) const MAP_PROGRESS_LEFT: f32 = 254.0;
 pub(crate) const MAP_PROGRESS_WIDTH: f32 = 284.0;
-pub(crate) const MAP_PROGRESS_Y: f32 = -62.0;
 pub(crate) const TOOLTIP_WIDTH: f32 = 278.0;
 pub(crate) const TOOLTIP_PADDING: f32 = 12.0;
 pub(crate) const BOTTOM_BUTTON_SIZE: Vec2 = Vec2::new(82.0, 46.0);
