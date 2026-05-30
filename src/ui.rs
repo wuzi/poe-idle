@@ -17,10 +17,10 @@ use theme::{
 use crate::components::{
     ActivePanel, BottomButton, BottomButtonLabel, CharacterPanelPiece, CharacterPanelText,
     DraggedItem, DraggedItemVisual, EquippedTooltipBackground, EquippedTooltipText, Health,
-    HudText, InventoryCell, InventoryCellLabel, InventoryPanelPiece, InventorySource,
-    ItemTooltipBackground, ItemTooltipText, Player, PortalMapButton, PortalMapButtonLabel,
-    PortalMapRouteSlot, PortalPanelPiece, PortalToggleButton, PortalToggleButtonLabel,
-    ProgressBarFill, UiState,
+    HeroXpBarFill, HeroXpBarText, HudText, InventoryCell, InventoryCellLabel,
+    InventoryPanelPiece, InventorySource, ItemTooltipBackground, ItemTooltipText, Player,
+    PortalMapButton, PortalMapButtonLabel, PortalMapRouteSlot, PortalPanelPiece,
+    PortalToggleButton, PortalToggleButtonLabel, ProgressBarFill, UiState,
 };
 use crate::constants::{
     BOTTOM_BUTTON_SIZE, INVENTORY_CELL_SIZE, TOOLTIP_PADDING, TOOLTIP_WIDTH, WINDOW_HEIGHT,
@@ -440,9 +440,63 @@ fn spawn_character_panel(commands: &mut Commands) {
     });
     spawn_character_ui_window(commands, "HERO", 406.0, 17.0, |parent| {
         spawn_character_ui_section(parent, CharacterPanelText::Header, 0.38);
-        spawn_character_ui_section(parent, CharacterPanelText::Equipment, 1.35);
-        spawn_character_ui_section(parent, CharacterPanelText::Upgrades, 1.45);
+        spawn_hero_xp_bar(parent);
+        spawn_character_ui_section(parent, CharacterPanelText::Equipment, 1.25);
+        spawn_character_ui_section(parent, CharacterPanelText::Upgrades, 1.35);
     });
+}
+
+fn spawn_hero_xp_bar(parent: &mut ChildSpawnerCommands) {
+    parent
+        .spawn((
+            Node {
+                width: percent(100),
+                flex_grow: 0.28,
+                min_height: px(0),
+                padding: UiRect::all(px(8)),
+                flex_direction: FlexDirection::Column,
+                row_gap: px(4),
+                ..default()
+            },
+            BackgroundColor(UiColors::section()),
+        ))
+        .with_children(|section| {
+            section.spawn((
+                Text::new(""),
+                TextFont {
+                    font_size: 11.0,
+                    ..default()
+                },
+                TextColor(UiColors::text_primary()),
+                TextLayout::new_with_justify(Justify::Left),
+                Node {
+                    width: percent(100),
+                    ..default()
+                },
+                HeroXpBarText,
+                Label,
+            ));
+            section
+                .spawn((
+                    Node {
+                        width: percent(100),
+                        height: px(10.0),
+                        ..default()
+                    },
+                    BackgroundColor(Color::srgba(0.05, 0.04, 0.035, 0.95)),
+                ))
+                .with_children(|bar| {
+                    bar.spawn((
+                        Node {
+                            width: px(1.0),
+                            height: percent(100),
+                            ..default()
+                        },
+                        BackgroundColor(Color::srgb(0.55, 0.82, 0.38)),
+                        HeroXpBarFill,
+                    ));
+                });
+        });
 }
 
 fn spawn_character_ui_window(
@@ -923,7 +977,15 @@ pub(crate) fn sync_character_panel(
     ui_state: Res<UiState>,
     player_query: Query<&Health, With<Player>>,
     mut visibility_query: Query<&mut Visibility, With<CharacterPanelPiece>>,
-    mut ui_text_query: Query<(&CharacterPanelText, &mut Text)>,
+    mut ui_text_query: Query<
+        (&CharacterPanelText, &mut Text),
+        (With<CharacterPanelText>, Without<HeroXpBarText>),
+    >,
+    mut hero_xp_text_query: Query<
+        &mut Text,
+        (With<HeroXpBarText>, Without<CharacterPanelText>),
+    >,
+    mut hero_xp_fill_query: Query<&mut Node, With<HeroXpBarFill>>,
 ) {
     let is_visible = ui_state.active_panel == ActivePanel::Character;
     for mut visibility in &mut visibility_query {
@@ -998,6 +1060,25 @@ pub(crate) fn sync_character_panel(
 
     for (kind, mut text) in &mut ui_text_query {
         text.0 = panel_text(kind);
+    }
+
+    let xp_to_next = profile.xp_to_next_level();
+    let xp_remaining = xp_to_next.saturating_sub(profile.xp);
+    let xp_progress = if xp_to_next == 0 {
+        1.0
+    } else {
+        profile.xp as f32 / xp_to_next as f32
+    }
+    .clamp(0.0, 1.0);
+
+    for mut text in &mut hero_xp_text_query {
+        text.0 = format!(
+            "EXP {}/{}  ({} to level up)",
+            profile.xp, xp_to_next, xp_remaining
+        );
+    }
+    for mut node in &mut hero_xp_fill_query {
+        node.width = percent((xp_progress * 100.0).max(1.0));
     }
 }
 
