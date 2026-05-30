@@ -11,8 +11,8 @@ pub(crate) use talents::{handle_talent_panel, sync_talent_panel};
 use crafting::{spawn_crafting_panel, use_item_on_crafting_panel};
 use talents::spawn_talent_panel;
 use theme::{
-    UiColors, bounded_lines, navigation_button_color, spawn_panel_label,
-    spawn_standard_panel_chrome, truncate_chars,
+    STANDARD_PANEL_SIZE, UiColors, UiFontSize, bounded_lines, navigation_button_color,
+    truncate_chars,
 };
 
 use crate::components::{
@@ -133,13 +133,87 @@ pub(crate) fn spawn_screen_layout(
 }
 
 fn spawn_inventory_panel_frame(commands: &mut Commands, center: Vec3, title: &'static str) {
-    spawn_standard_panel_chrome(
-        commands,
-        || InventoryPanelPiece,
-        center,
-        title,
-        Visibility::Hidden,
-    );
+    let (left, top) = ui_position_from_screen_center(center.truncate(), STANDARD_PANEL_SIZE);
+    commands
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                left: px(left),
+                top: px(top),
+                width: px(STANDARD_PANEL_SIZE.x),
+                height: px(STANDARD_PANEL_SIZE.y),
+                padding: UiRect::all(px(6)),
+                ..default()
+            },
+            BackgroundColor(UiColors::frame_shadow()),
+            Visibility::Hidden,
+            ZIndex(14),
+            InventoryPanelPiece,
+        ))
+        .with_children(|panel| {
+            panel
+                .spawn((
+                    Node {
+                        width: percent(100),
+                        height: percent(100),
+                        padding: UiRect::all(px(8)),
+                        ..default()
+                    },
+                    BackgroundColor(UiColors::frame_shell()),
+                ))
+                .with_children(|shell| {
+                    shell.spawn((
+                        Node {
+                            position_type: PositionType::Absolute,
+                            left: px(14),
+                            top: px(60),
+                            width: px(340),
+                            height: px(426),
+                            ..default()
+                        },
+                        BackgroundColor(UiColors::frame_body()),
+                    ));
+                    shell.spawn((
+                        Node {
+                            position_type: PositionType::Absolute,
+                            left: px(15),
+                            top: px(24),
+                            width: px(338),
+                            height: px(40),
+                            align_items: AlignItems::Center,
+                            padding: UiRect::left(px(16)),
+                            ..default()
+                        },
+                        BackgroundColor(UiColors::header()),
+                    ));
+                    shell.spawn((
+                        Node {
+                            position_type: PositionType::Absolute,
+                            left: px(15),
+                            top: px(64),
+                            width: px(338),
+                            height: px(4),
+                            ..default()
+                        },
+                        BackgroundColor(UiColors::accent()),
+                    ));
+                    shell.spawn((
+                        Text::new(title),
+                        TextFont {
+                            font_size: UiFontSize::WINDOW_TITLE,
+                            ..default()
+                        },
+                        TextColor(UiColors::text_header()),
+                        Node {
+                            position_type: PositionType::Absolute,
+                            left: px(24),
+                            top: px(30),
+                            ..default()
+                        },
+                        Label,
+                    ));
+                });
+        });
 }
 
 fn spawn_portal_ui_panel(commands: &mut Commands, map_count: usize) {
@@ -362,14 +436,28 @@ fn spawn_inventory_cells(
                 start_y - row as f32 * step,
                 cell_z,
             );
+            let (left, top) =
+                ui_position_from_screen_center(offset.truncate(), Vec2::splat(INVENTORY_CELL_SIZE));
             let mut cell = commands.spawn((
-                Sprite::from_color(
-                    Color::srgba(0.10, 0.10, 0.11, 0.98),
-                    Vec2::splat(INVENTORY_CELL_SIZE),
-                ),
-                Transform::from_translation(offset),
+                Button,
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: px(left),
+                    top: px(top),
+                    width: px(INVENTORY_CELL_SIZE),
+                    height: px(INVENTORY_CELL_SIZE),
+                    align_items: AlignItems::Center,
+                    justify_content: JustifyContent::Center,
+                    border: UiRect::all(px(1)),
+                    ..default()
+                },
+                BorderColor::all(Color::srgba(0.04, 0.035, 0.03, 0.96)),
+                BackgroundColor(Color::srgba(0.10, 0.10, 0.11, 0.98)),
                 Visibility::Hidden,
-                ScreenFixed { offset },
+                ZIndex(match panel {
+                    ActivePanel::Crafting => 18,
+                    _ => 16,
+                }),
                 InventoryCell {
                     panel,
                     source,
@@ -377,30 +465,33 @@ fn spawn_inventory_cells(
                 },
             ));
             tag_inventory_cell_panel(&mut cell, panel);
-
-            let mut label = commands.spawn((
-                Text2d::new(""),
-                TextFont {
-                    font_size: 9.0,
-                    ..default()
-                },
-                TextColor(Color::srgb(0.18, 0.16, 0.13)),
-                TextLayout::new_with_justify(Justify::Center),
-                Anchor::CENTER,
-                Transform::from_translation(offset + Vec3::new(0.0, 0.0, 1.0)),
-                Visibility::Hidden,
-                ScreenFixed {
-                    offset: offset + Vec3::new(0.0, 0.0, 1.0),
-                },
-                InventoryCellLabel {
-                    panel,
-                    source,
-                    index,
-                },
-            ));
-            tag_inventory_cell_panel(&mut label, panel);
+            cell.with_children(|parent| {
+                let mut label = parent.spawn((
+                    Text::new(""),
+                    TextFont {
+                        font_size: 9.0,
+                        ..default()
+                    },
+                    TextColor(Color::srgb(0.18, 0.16, 0.13)),
+                    TextLayout::new_with_justify(Justify::Center),
+                    InventoryCellLabel {
+                        panel,
+                        source,
+                        index,
+                    },
+                    Label,
+                ));
+                tag_inventory_cell_panel(&mut label, panel);
+            });
         }
     }
+}
+
+fn ui_position_from_screen_center(center: Vec2, size: Vec2) -> (f32, f32) {
+    (
+        center.x + WINDOW_WIDTH as f32 * 0.5 - size.x * 0.5,
+        WINDOW_HEIGHT as f32 * 0.5 - center.y - size.y * 0.5,
+    )
 }
 
 fn tag_inventory_cell_panel(entity: &mut EntityCommands, panel: ActivePanel) {
@@ -445,17 +536,35 @@ fn spawn_inventory_panel_label(
     offset: Vec3,
     font_size: f32,
 ) {
-    spawn_panel_label(
-        commands,
-        InventoryPanelPiece,
-        label,
-        offset,
-        font_size,
-        UiColors::text_section(),
+    let (left, top) = ui_position_from_screen_top_left(offset.truncate());
+    commands.spawn((
+        Text::new(label),
+        TextFont {
+            font_size,
+            ..default()
+        },
+        TextColor(UiColors::text_section()),
+        TextLayout::new_with_justify(Justify::Left),
+        Node {
+            position_type: PositionType::Absolute,
+            left: px(left),
+            top: px(top),
+            width: px(180),
+            height: px(24),
+            ..default()
+        },
         Visibility::Hidden,
-        Justify::Left,
-        Anchor::TOP_LEFT,
-    );
+        ZIndex(21),
+        InventoryPanelPiece,
+        Label,
+    ));
+}
+
+fn ui_position_from_screen_top_left(top_left: Vec2) -> (f32, f32) {
+    (
+        top_left.x + WINDOW_WIDTH as f32 * 0.5,
+        WINDOW_HEIGHT as f32 * 0.5 - top_left.y,
+    )
 }
 
 fn spawn_bottom_button(
@@ -692,80 +801,65 @@ fn character_ui_text_color(kind: CharacterPanelText) -> Color {
 }
 
 fn spawn_item_tooltip(commands: &mut Commands) {
-    let background_offset = Vec3::new(0.0, 0.0, 56.0);
-    let text_offset = Vec3::new(0.0, 0.0, 57.0);
+    spawn_item_tooltip_pair(commands, ItemTooltipBackground, ItemTooltipText);
+    spawn_item_tooltip_pair(commands, EquippedTooltipBackground, EquippedTooltipText);
+}
 
-    commands.spawn((
-        Sprite::from_color(
-            Color::srgba(0.05, 0.045, 0.04, 0.96),
-            Vec2::new(TOOLTIP_WIDTH, 120.0),
-        ),
-        Transform::from_translation(background_offset),
-        Visibility::Hidden,
-        ScreenFixed {
-            offset: background_offset,
-        },
-        ItemTooltipBackground,
-    ));
-
-    commands.spawn((
-        Text2d::new(""),
-        TextFont {
-            font_size: 14.0,
-            ..default()
-        },
-        TextColor(Color::srgb(0.93, 0.90, 0.82)),
-        TextLayout::new_with_justify(Justify::Left),
-        Anchor::TOP_LEFT,
-        Transform::from_translation(text_offset),
-        Visibility::Hidden,
-        ScreenFixed {
-            offset: text_offset,
-        },
-        ItemTooltipText,
-    ));
-
-    commands.spawn((
-        Sprite::from_color(
-            Color::srgba(0.05, 0.045, 0.04, 0.96),
-            Vec2::new(TOOLTIP_WIDTH, 120.0),
-        ),
-        Transform::from_translation(background_offset),
-        Visibility::Hidden,
-        ScreenFixed {
-            offset: background_offset,
-        },
-        EquippedTooltipBackground,
-    ));
-
-    commands.spawn((
-        Text2d::new(""),
-        TextFont {
-            font_size: 14.0,
-            ..default()
-        },
-        TextColor(Color::srgb(0.93, 0.90, 0.82)),
-        TextLayout::new_with_justify(Justify::Left),
-        Anchor::TOP_LEFT,
-        Transform::from_translation(text_offset),
-        Visibility::Hidden,
-        ScreenFixed {
-            offset: text_offset,
-        },
-        EquippedTooltipText,
-    ));
+fn spawn_item_tooltip_pair<B: Component, T: Component>(
+    commands: &mut Commands,
+    background_marker: B,
+    text_marker: T,
+) {
+    commands
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                left: px(0.0),
+                top: px(0.0),
+                width: px(TOOLTIP_WIDTH),
+                height: px(120.0),
+                padding: UiRect::all(px(TOOLTIP_PADDING)),
+                overflow: Overflow::clip_y(),
+                ..default()
+            },
+            BackgroundColor(Color::srgba(0.05, 0.045, 0.04, 0.96)),
+            Visibility::Hidden,
+            ZIndex(50),
+            background_marker,
+        ))
+        .with_children(|parent| {
+            parent.spawn((
+                Text::new(""),
+                TextFont {
+                    font_size: 14.0,
+                    ..default()
+                },
+                TextColor(Color::srgb(0.93, 0.90, 0.82)),
+                TextLayout::new_with_justify(Justify::Left),
+                Node {
+                    width: percent(100),
+                    ..default()
+                },
+                Visibility::Hidden,
+                text_marker,
+                Label,
+            ));
+        });
 }
 
 fn spawn_dragged_item_visual(commands: &mut Commands) {
-    let offset = Vec3::new(0.0, 0.0, 58.0);
     commands.spawn((
-        Sprite::from_color(
-            Color::srgba(0.72, 0.72, 0.68, 0.92),
-            Vec2::splat(INVENTORY_CELL_SIZE * 0.88),
-        ),
-        Transform::from_translation(offset),
+        Node {
+            position_type: PositionType::Absolute,
+            left: px(0.0),
+            top: px(0.0),
+            width: px(INVENTORY_CELL_SIZE * 0.88),
+            height: px(INVENTORY_CELL_SIZE * 0.88),
+            ..default()
+        },
+        BackgroundColor(Color::srgba(0.72, 0.72, 0.68, 0.92)),
         Visibility::Hidden,
-        ScreenFixed { offset },
+        ZIndex(55),
         DraggedItemVisual,
     ));
 }
@@ -1052,7 +1146,7 @@ pub(crate) fn handle_inventory_input(
     mut profile: ResMut<PlayerProfile>,
     mouse: Res<ButtonInput<MouseButton>>,
     window_query: Query<&Window>,
-    cell_query: Query<(&InventoryCell, &ScreenFixed)>,
+    cell_query: Query<(&InventoryCell, Option<&ScreenFixed>, Option<&Interaction>)>,
 ) {
     if !matches!(
         ui_state.active_panel,
@@ -1118,9 +1212,9 @@ pub(crate) fn sync_dragged_item_visual(
     database: Res<GameDatabase>,
     ui_state: Res<UiState>,
     window_query: Query<&Window>,
-    mut query: Query<(&mut ScreenFixed, &mut Sprite, &mut Visibility), With<DraggedItemVisual>>,
+    mut query: Query<(&mut Node, &mut BackgroundColor, &mut Visibility), With<DraggedItemVisual>>,
 ) {
-    let Ok((mut fixed, mut sprite, mut visibility)) = query.single_mut() else {
+    let Ok((mut node, mut background, mut visibility)) = query.single_mut() else {
         return;
     };
     let Some(dragged_item) = &ui_state.dragged_item else {
@@ -1139,8 +1233,11 @@ pub(crate) fn sync_dragged_item_visual(
         return;
     }
 
-    fixed.offset = Vec3::new(cursor_offset.x, cursor_offset.y, fixed.offset.z);
-    sprite.color = item_cell_color(&dragged_item.item, &database);
+    let preview_size = Vec2::splat(INVENTORY_CELL_SIZE * 0.88);
+    let (left, top) = ui_position_from_screen_center(cursor_offset, preview_size);
+    node.left = px(left);
+    node.top = px(top);
+    background.0 = item_cell_color(&dragged_item.item, &database);
     *visibility = Visibility::Visible;
 }
 
@@ -1240,7 +1337,7 @@ pub(crate) fn update_item_tooltip(
     ui_state: Res<UiState>,
     window_query: Query<&Window>,
     cell_query: Query<
-        (&InventoryCell, &ScreenFixed),
+        (&InventoryCell, Option<&ScreenFixed>, Option<&Interaction>),
         (
             Without<ItemTooltipBackground>,
             Without<ItemTooltipText>,
@@ -1249,7 +1346,7 @@ pub(crate) fn update_item_tooltip(
         ),
     >,
     mut background_query: Query<
-        (&mut ScreenFixed, &mut Sprite, &mut Visibility),
+        (&mut Node, &mut BackgroundColor, &mut Visibility),
         (
             With<ItemTooltipBackground>,
             Without<ItemTooltipText>,
@@ -1258,12 +1355,7 @@ pub(crate) fn update_item_tooltip(
         ),
     >,
     mut text_query: Query<
-        (
-            &mut ScreenFixed,
-            &mut Text2d,
-            &mut TextColor,
-            &mut Visibility,
-        ),
+        (&mut Text, &mut TextColor, &mut Visibility),
         (
             With<ItemTooltipText>,
             Without<ItemTooltipBackground>,
@@ -1272,7 +1364,7 @@ pub(crate) fn update_item_tooltip(
         ),
     >,
     mut equipped_background_query: Query<
-        (&mut ScreenFixed, &mut Sprite, &mut Visibility),
+        (&mut Node, &mut BackgroundColor, &mut Visibility),
         (
             With<EquippedTooltipBackground>,
             Without<EquippedTooltipText>,
@@ -1281,12 +1373,7 @@ pub(crate) fn update_item_tooltip(
         ),
     >,
     mut equipped_text_query: Query<
-        (
-            &mut ScreenFixed,
-            &mut Text2d,
-            &mut TextColor,
-            &mut Visibility,
-        ),
+        (&mut Text, &mut TextColor, &mut Visibility),
         (
             With<EquippedTooltipText>,
             Without<EquippedTooltipBackground>,
@@ -1295,30 +1382,25 @@ pub(crate) fn update_item_tooltip(
         ),
     >,
 ) {
-    let Ok((mut background_fixed, mut background_sprite, mut background_visibility)) =
+    let Ok((mut background_node, mut background_color, mut background_visibility)) =
         background_query.single_mut()
     else {
         return;
     };
-    let Ok((mut text_fixed, mut tooltip_text, mut tooltip_color, mut text_visibility)) =
-        text_query.single_mut()
+    let Ok((mut tooltip_text, mut tooltip_color, mut text_visibility)) = text_query.single_mut()
     else {
         return;
     };
     let Ok((
-        mut equipped_background_fixed,
-        mut equipped_background_sprite,
+        mut equipped_background_node,
+        mut equipped_background_color,
         mut equipped_background_visibility,
     )) = equipped_background_query.single_mut()
     else {
         return;
     };
-    let Ok((
-        mut equipped_text_fixed,
-        mut equipped_text,
-        mut equipped_text_color,
-        mut equipped_text_visibility,
-    )) = equipped_text_query.single_mut()
+    let Ok((mut equipped_text, mut equipped_text_color, mut equipped_text_visibility)) =
+        equipped_text_query.single_mut()
     else {
         return;
     };
@@ -1355,14 +1437,19 @@ pub(crate) fn update_item_tooltip(
         WINDOW_HEIGHT as f32 * 0.5 - cursor_position.y,
     );
     let active_panel = ui_state.active_panel;
-    let hovered_item = cell_query.iter().find_map(|(cell, fixed)| {
+    let hovered_item = cell_query.iter().find_map(|(cell, fixed, interaction)| {
         if cell.panel != active_panel {
             return None;
         }
-        let half_cell = INVENTORY_CELL_SIZE * 0.5;
-        let within_x = (cursor_offset.x - fixed.offset.x).abs() <= half_cell;
-        let within_y = (cursor_offset.y - fixed.offset.y).abs() <= half_cell;
-        if within_x && within_y {
+        let hovered = interaction.is_some_and(|interaction| {
+            matches!(*interaction, Interaction::Hovered | Interaction::Pressed)
+        }) || fixed.is_some_and(|fixed| {
+            let half_cell = INVENTORY_CELL_SIZE * 0.5;
+            let within_x = (cursor_offset.x - fixed.offset.x).abs() <= half_cell;
+            let within_y = (cursor_offset.y - fixed.offset.y).abs() <= half_cell;
+            within_x && within_y
+        });
+        if hovered {
             item_for_cell(cell, &profile).map(|item| (cell.source, item))
         } else {
             None
@@ -1396,38 +1483,21 @@ pub(crate) fn update_item_tooltip(
         tooltip_positions(cursor_offset, max_tooltip_height, equipped_item.is_some());
 
     let rarity_tint = rarity_color(item.rarity);
-    background_sprite.custom_size = Some(Vec2::new(TOOLTIP_WIDTH, primary_tooltip_height));
-    background_sprite.color = rarity_tint.mix(&Color::srgba(0.03, 0.025, 0.025, 0.96), 0.82);
-    background_fixed.offset = Vec3::new(
-        top_left.x + TOOLTIP_WIDTH * 0.5,
-        top_left.y - primary_tooltip_height * 0.5,
-        background_fixed.offset.z,
-    );
-    text_fixed.offset = Vec3::new(
-        top_left.x + TOOLTIP_PADDING,
-        top_left.y - TOOLTIP_PADDING,
-        text_fixed.offset.z,
-    );
+    set_tooltip_node_position(&mut background_node, top_left, primary_tooltip_height);
+    background_color.0 = rarity_tint.mix(&Color::srgba(0.03, 0.025, 0.025, 0.96), 0.82);
     tooltip_color.0 = Color::srgb(0.95, 0.92, 0.84);
     *background_visibility = Visibility::Visible;
     *text_visibility = Visibility::Visible;
 
     if let (Some(equipped_item), Some(equipped_top_left)) = (equipped_item, equipped_top_left) {
         let equipped_rarity_tint = rarity_color(equipped_item.rarity);
-        equipped_background_sprite.custom_size =
-            Some(Vec2::new(TOOLTIP_WIDTH, equipped_tooltip_height));
-        equipped_background_sprite.color =
+        set_tooltip_node_position(
+            &mut equipped_background_node,
+            equipped_top_left,
+            equipped_tooltip_height,
+        );
+        equipped_background_color.0 =
             equipped_rarity_tint.mix(&Color::srgba(0.03, 0.025, 0.025, 0.96), 0.82);
-        equipped_background_fixed.offset = Vec3::new(
-            equipped_top_left.x + TOOLTIP_WIDTH * 0.5,
-            equipped_top_left.y - equipped_tooltip_height * 0.5,
-            equipped_background_fixed.offset.z,
-        );
-        equipped_text_fixed.offset = Vec3::new(
-            equipped_top_left.x + TOOLTIP_PADDING,
-            equipped_top_left.y - TOOLTIP_PADDING,
-            equipped_text_fixed.offset.z,
-        );
         equipped_text_color.0 = Color::srgb(0.95, 0.92, 0.84);
         *equipped_background_visibility = Visibility::Visible;
         *equipped_text_visibility = Visibility::Visible;
@@ -1435,6 +1505,13 @@ pub(crate) fn update_item_tooltip(
         *equipped_background_visibility = Visibility::Hidden;
         *equipped_text_visibility = Visibility::Hidden;
     }
+}
+
+fn set_tooltip_node_position(node: &mut Node, top_left: Vec2, height: f32) {
+    node.left = px(top_left.x + WINDOW_WIDTH as f32 * 0.5);
+    node.top = px(WINDOW_HEIGHT as f32 * 0.5 - top_left.y);
+    node.width = px(TOOLTIP_WIDTH);
+    node.height = px(height);
 }
 
 fn tooltip_height(text: &str) -> f32 {
@@ -1483,20 +1560,16 @@ pub(crate) fn sync_inventory_grid(
     database: Res<GameDatabase>,
     profile: Res<PlayerProfile>,
     ui_state: Res<UiState>,
-    mut query: Query<(&InventoryCell, &mut Sprite)>,
-    mut label_query: Query<(&InventoryCellLabel, &mut Text2d, &mut TextColor)>,
+    mut sprite_query: Query<(&InventoryCell, &mut Sprite)>,
+    mut ui_cell_query: Query<
+        (&InventoryCell, &mut BackgroundColor),
+        (With<Button>, Without<Sprite>),
+    >,
+    mut text_2d_label_query: Query<(&InventoryCellLabel, &mut Text2d, &mut TextColor)>,
+    mut ui_label_query: Query<(&InventoryCellLabel, &mut Text, &mut TextColor), Without<Text2d>>,
 ) {
-    for (cell, mut sprite) in &mut query {
-        let item = item_for_cell(cell, &profile);
-        let is_drag_source = ui_state.dragged_item.as_ref().is_some_and(|dragged_item| {
-            dragged_item.source == cell.source && dragged_item.index == cell.index
-        });
-
-        let color = if let Some(item) = item {
-            item_cell_color(item, &database)
-        } else {
-            Color::srgba(0.10, 0.10, 0.11, 0.98)
-        };
+    for (cell, mut sprite) in &mut sprite_query {
+        let (color, is_drag_source) = inventory_cell_visual(cell, &profile, &database, &ui_state);
         sprite.color = if is_drag_source {
             color.mix(&Color::srgba(0.02, 0.02, 0.02, 0.98), 0.45)
         } else {
@@ -1504,39 +1577,96 @@ pub(crate) fn sync_inventory_grid(
         };
     }
 
-    for (label, mut text, mut text_color) in &mut label_query {
-        let cell = InventoryCell {
-            panel: label.panel,
-            source: label.source,
-            index: label.index,
-        };
-        let item = item_for_cell(&cell, &profile);
-        let is_drag_source = ui_state.dragged_item.as_ref().is_some_and(|dragged_item| {
-            dragged_item.source == label.source && dragged_item.index == label.index
-        });
-
-        if is_drag_source {
-            text.0.clear();
-            continue;
-        }
-
-        if let Some(item) = item {
-            let definition = &database.items[item.def_id];
-            text.0 = slot_abbreviation(definition.slot).into();
-            text_color.0 = item_label_color(item.rarity);
-        } else if label.source == InventorySource::Equipment {
-            text.0 = ItemSlot::all()
-                .get(label.index)
-                .map(|slot| slot_abbreviation(*slot))
-                .unwrap_or("")
-                .into();
-            text_color.0 = Color::srgba(0.58, 0.53, 0.45, 0.62);
-        } else if label.source == InventorySource::Crafting {
-            text.0 = format!("{}", label.index + 1);
-            text_color.0 = Color::srgba(0.58, 0.53, 0.45, 0.62);
+    for (cell, mut background) in &mut ui_cell_query {
+        let (color, is_drag_source) = inventory_cell_visual(cell, &profile, &database, &ui_state);
+        background.0 = if is_drag_source {
+            color.mix(&Color::srgba(0.02, 0.02, 0.02, 0.98), 0.45)
         } else {
-            text.0.clear();
-        }
+            color
+        };
+    }
+
+    for (label, mut text, mut text_color) in &mut text_2d_label_query {
+        sync_inventory_label(
+            label,
+            &mut text.0,
+            &mut text_color.0,
+            &profile,
+            &database,
+            &ui_state,
+        );
+    }
+
+    for (label, mut text, mut text_color) in &mut ui_label_query {
+        sync_inventory_label(
+            label,
+            &mut text.0,
+            &mut text_color.0,
+            &profile,
+            &database,
+            &ui_state,
+        );
+    }
+}
+
+fn inventory_cell_visual(
+    cell: &InventoryCell,
+    profile: &PlayerProfile,
+    database: &GameDatabase,
+    ui_state: &UiState,
+) -> (Color, bool) {
+    let item = item_for_cell(cell, profile);
+    let is_drag_source = ui_state.dragged_item.as_ref().is_some_and(|dragged_item| {
+        dragged_item.source == cell.source && dragged_item.index == cell.index
+    });
+
+    let color = if let Some(item) = item {
+        item_cell_color(item, database)
+    } else {
+        Color::srgba(0.10, 0.10, 0.11, 0.98)
+    };
+    (color, is_drag_source)
+}
+
+fn sync_inventory_label(
+    label: &InventoryCellLabel,
+    text: &mut String,
+    text_color: &mut Color,
+    profile: &PlayerProfile,
+    database: &GameDatabase,
+    ui_state: &UiState,
+) {
+    let cell = InventoryCell {
+        panel: label.panel,
+        source: label.source,
+        index: label.index,
+    };
+    let item = item_for_cell(&cell, profile);
+    let is_drag_source = ui_state.dragged_item.as_ref().is_some_and(|dragged_item| {
+        dragged_item.source == label.source && dragged_item.index == label.index
+    });
+
+    if is_drag_source {
+        text.clear();
+        return;
+    }
+
+    if let Some(item) = item {
+        let definition = &database.items[item.def_id];
+        *text = slot_abbreviation(definition.slot).into();
+        *text_color = item_label_color(item.rarity);
+    } else if label.source == InventorySource::Equipment {
+        *text = ItemSlot::all()
+            .get(label.index)
+            .map(|slot| slot_abbreviation(*slot))
+            .unwrap_or("")
+            .into();
+        *text_color = Color::srgba(0.58, 0.53, 0.45, 0.62);
+    } else if label.source == InventorySource::Crafting {
+        *text = format!("{}", label.index + 1);
+        *text_color = Color::srgba(0.58, 0.53, 0.45, 0.62);
+    } else {
+        text.clear();
     }
 }
 
@@ -1553,13 +1683,22 @@ fn cursor_offset(window_query: &Query<&Window>) -> Option<Vec2> {
 
 fn hovered_inventory_cell(
     cursor_offset: Vec2,
-    cell_query: &Query<(&InventoryCell, &ScreenFixed)>,
+    cell_query: &Query<(&InventoryCell, Option<&ScreenFixed>, Option<&Interaction>)>,
     active_panel: ActivePanel,
 ) -> Option<(InventorySource, usize)> {
-    cell_query.iter().find_map(|(cell, fixed)| {
+    cell_query.iter().find_map(|(cell, fixed, interaction)| {
         if cell.panel != active_panel {
             return None;
         }
+        if interaction.is_some_and(|interaction| {
+            matches!(*interaction, Interaction::Hovered | Interaction::Pressed)
+        }) {
+            return Some((cell.source, cell.index));
+        }
+
+        let Some(fixed) = fixed else {
+            return None;
+        };
         let half_cell = INVENTORY_CELL_SIZE * 0.5;
         let within_x = (cursor_offset.x - fixed.offset.x).abs() <= half_cell;
         let within_y = (cursor_offset.y - fixed.offset.y).abs() <= half_cell;

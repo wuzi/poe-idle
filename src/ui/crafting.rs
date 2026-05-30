@@ -3,7 +3,7 @@ use bevy::sprite::Anchor;
 
 use crate::components::{
     ActivePanel, CraftingAction, CraftingButton, CraftingButtonLabel, CraftingInfoText,
-    CraftingPanelPiece, InventorySource, ScreenFixed, UiState,
+    CraftingPanelPiece, InventorySource, UiState,
 };
 use crate::constants::CRAFTING_SLOT_COUNT;
 use crate::data::{
@@ -15,7 +15,7 @@ use super::theme::{
     ACTION_BUTTON_SIZE, UiColors, UiFontSize, action_button_color, bounded_lines,
     spawn_panel_label, spawn_panel_rect, spawn_wide_panel_chrome,
 };
-use super::{cursor_offset, item_location, spawn_inventory_cells};
+use super::{item_location, spawn_inventory_cells, ui_position_from_screen_center};
 
 fn spawn_crafting_button(
     commands: &mut Commands,
@@ -24,50 +24,67 @@ fn spawn_crafting_button(
     offset: Vec3,
 ) {
     let size = ACTION_BUTTON_SIZE;
-    commands.spawn((
-        Sprite::from_color(action_button_color(false, false), size),
-        Transform::from_translation(offset),
-        Visibility::Hidden,
-        ScreenFixed { offset },
-        CraftingPanelPiece,
-        CraftingButton { size, action },
-    ));
-
-    let text_offset = offset + Vec3::new(0.0, 5.0, 1.0);
-    commands.spawn((
-        Text2d::new(label),
-        TextFont {
-            font_size: UiFontSize::BUTTON,
-            ..default()
-        },
-        TextColor(UiColors::text_section()),
-        TextLayout::new_with_justify(Justify::Center),
-        Anchor::CENTER,
-        Transform::from_translation(text_offset),
-        Visibility::Hidden,
-        ScreenFixed {
-            offset: text_offset,
-        },
-        CraftingPanelPiece,
-        CraftingButtonLabel { action },
-    ));
+    let (left, top) = ui_position_from_screen_center(offset.truncate(), size);
+    commands
+        .spawn((
+            Button,
+            Node {
+                position_type: PositionType::Absolute,
+                left: px(left),
+                top: px(top),
+                width: px(size.x),
+                height: px(size.y),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Center,
+                border: UiRect::all(px(2)),
+                ..default()
+            },
+            BorderColor::all(UiColors::accent()),
+            BackgroundColor(action_button_color(false, false)),
+            Visibility::Hidden,
+            ZIndex(22),
+            CraftingPanelPiece,
+            CraftingButton { action },
+        ))
+        .with_children(|parent| {
+            parent.spawn((
+                Text::new(label),
+                TextFont {
+                    font_size: UiFontSize::BUTTON,
+                    ..default()
+                },
+                TextColor(UiColors::text_section()),
+                CraftingPanelPiece,
+                CraftingButtonLabel { action },
+                Label,
+            ));
+        });
 }
 
 fn spawn_crafting_info_text(commands: &mut Commands, offset: Vec3) {
+    let (left, top) = ui_position_from_screen_center(offset.truncate(), Vec2::new(230.0, 74.0));
     commands.spawn((
-        Text2d::new(""),
+        Text::new(""),
         TextFont {
             font_size: UiFontSize::BODY_SMALL,
             ..default()
         },
         TextColor(UiColors::text_muted()),
         TextLayout::new_with_justify(Justify::Left),
-        Anchor::TOP_LEFT,
-        Transform::from_translation(offset),
+        Node {
+            position_type: PositionType::Absolute,
+            left: px(left),
+            top: px(top),
+            width: px(230.0),
+            height: px(74.0),
+            overflow: Overflow::clip_y(),
+            ..default()
+        },
         Visibility::Hidden,
-        ScreenFixed { offset },
+        ZIndex(22),
         CraftingPanelPiece,
         CraftingInfoText,
+        Label,
     ));
 }
 
@@ -196,22 +213,14 @@ pub(crate) fn handle_crafting_input(
     mut profile: ResMut<PlayerProfile>,
     mut rng: ResMut<LootRng>,
     mouse: Res<ButtonInput<MouseButton>>,
-    window_query: Query<&Window>,
-    button_query: Query<(&CraftingButton, &ScreenFixed)>,
+    button_query: Query<(&CraftingButton, &Interaction), With<Button>>,
 ) {
     if ui_state.active_panel != ActivePanel::Crafting || ui_state.dragged_item.is_some() {
         return;
     }
 
-    let Some(cursor_offset) = cursor_offset(&window_query) else {
-        return;
-    };
-
-    let clicked_action = button_query.iter().find_map(|(button, fixed)| {
-        let half_size = button.size * 0.5;
-        let hovered = (cursor_offset.x - fixed.offset.x).abs() <= half_size.x
-            && (cursor_offset.y - fixed.offset.y).abs() <= half_size.y;
-        hovered.then_some(button.action)
+    let clicked_action = button_query.iter().find_map(|(button, interaction)| {
+        (*interaction == Interaction::Pressed).then_some(button.action)
     });
 
     let Some(clicked_action) = clicked_action else {
@@ -245,11 +254,13 @@ pub(crate) fn handle_crafting_input(
 pub(crate) fn sync_crafting_panel(
     ui_state: Res<UiState>,
     profile: Res<PlayerProfile>,
-    window_query: Query<&Window>,
     mut visibility_query: Query<&mut Visibility, With<CraftingPanelPiece>>,
-    mut button_query: Query<(&CraftingButton, &ScreenFixed, &mut Sprite)>,
+    mut button_query: Query<
+        (&CraftingButton, &Interaction, &mut BackgroundColor),
+        (With<Button>, Without<Sprite>),
+    >,
     mut label_query: Query<(&CraftingButtonLabel, &mut TextColor)>,
-    mut info_query: Query<&mut Text2d, With<CraftingInfoText>>,
+    mut info_query: Query<&mut Text, With<CraftingInfoText>>,
 ) {
     let is_visible = ui_state.active_panel == ActivePanel::Crafting;
     for mut visibility in &mut visibility_query {
@@ -265,18 +276,13 @@ pub(crate) fn sync_crafting_panel(
         CraftingPreview::Ready { .. }
     );
     let liquidation_ready = profile.crafting_liquidation_count() > 0;
-    let cursor_offset = cursor_offset(&window_query);
 
-    for (button, fixed, mut sprite) in &mut button_query {
+    for (button, interaction, mut background) in &mut button_query {
         let action_ready = crafting_action_ready(button.action, upgrade_ready, liquidation_ready);
-        let hovered = is_visible
-            && cursor_offset.is_some_and(|cursor| {
-                let half_size = button.size * 0.5;
-                (cursor.x - fixed.offset.x).abs() <= half_size.x
-                    && (cursor.y - fixed.offset.y).abs() <= half_size.y
-            });
+        let hovered =
+            is_visible && matches!(*interaction, Interaction::Hovered | Interaction::Pressed);
 
-        sprite.color = action_button_color(action_ready, hovered);
+        background.0 = action_button_color(action_ready, hovered);
     }
 
     for (label, mut text_color) in &mut label_query {

@@ -168,7 +168,6 @@ pub(crate) struct TalentResetLabel;
 
 #[derive(Component)]
 pub(crate) struct CraftingButton {
-    pub(crate) size: Vec2,
     pub(crate) action: CraftingAction,
 }
 
